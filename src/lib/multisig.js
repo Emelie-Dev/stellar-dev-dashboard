@@ -34,12 +34,29 @@ export const SESSION_STATUS = {
 // ─── Validation ───────────────────────────────────────────────────────────────
 
 export function isValidPublicKey(key) {
+  // Import the updated validation from stellar.ts
+  // Keypair.fromPublicKey only works for G..., so we need to check all formats
+  if (!key || typeof key !== 'string') return false
+  
+  const trimmed = key.trim()
+  
+  // Try G... Ed25519
   try {
-    StellarSdk.Keypair.fromPublicKey(key);
-    return true;
+    StellarSdk.Keypair.fromPublicKey(trimmed)
+    return true
   } catch {
-    return false;
+    // Fall through
   }
+  
+  // Try M... muxed account
+  try {
+    return StellarSdk.StrKey.isValidMuxedAccount(trimmed)
+  } catch {
+    // Fall through
+  }
+  
+  // Try name*domain federated address
+  return /^[a-zA-Z0-9._-]+\*[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(trimmed)
 }
 
 /**

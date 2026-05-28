@@ -274,7 +274,7 @@ export default function WalletConnect() {
           <input
             value={manualHardwareKey}
             onChange={(event) => setManualHardwareKey(event.target.value)}
-            placeholder="Manual public key for watch-only hardware wallets"
+            placeholder="G... public key, M... muxed, or name*domain federated address"
             style={{
               width: '100%',
               background: 'var(--bg-card)',

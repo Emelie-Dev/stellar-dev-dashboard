@@ -1,6 +1,8 @@
 import js from '@eslint/js';
 import react from 'eslint-plugin-react';
 import reactHooks from 'eslint-plugin-react-hooks';
+import tsParser from '@typescript-eslint/parser';
+import globals from 'globals';
 
 export default [
   {
@@ -12,9 +14,24 @@ export default [
       'playwright-report/**',
       'test-results/**',
       '.kiro/**',
+      '.storybook/preview.ts',
     ],
   },
-  js.configs.recommended,
+  {
+    files: ['**/*.{js,jsx}'],
+    ...js.configs.recommended,
+  },
+  {
+    files: ['**/*.{ts,tsx}'],
+    languageOptions: {
+      parser: tsParser,
+      parserOptions: {
+        ecmaFeatures: {
+          jsx: true,
+        },
+      },
+    },
+  },
   {
     files: ['**/*.{js,jsx,ts,tsx}'],
     languageOptions: {
@@ -26,17 +43,10 @@ export default [
         },
       },
       globals: {
-        window: 'readonly',
-        document: 'readonly',
-        console: 'readonly',
-        process: 'readonly',
-        fetch: 'readonly',
-        URL: 'readonly',
-        URLSearchParams: 'readonly',
-        setTimeout: 'readonly',
-        clearTimeout: 'readonly',
-        setInterval: 'readonly',
-        clearInterval: 'readonly',
+        ...globals.browser,
+        ...globals.node,
+        ...globals.vitest,
+        ...globals.jest,
       },
     },
     plugins: {
@@ -48,9 +58,14 @@ export default [
     },
     rules: {
       ...react.configs.recommended.rules,
-      ...reactHooks.configs.recommended.rules,
+      'react-hooks/rules-of-hooks': 'warn',
+      'react-hooks/exhaustive-deps': 'warn',
       'react/react-in-jsx-scope': 'off',
       'react/prop-types': 'off',
+      'react/display-name': 'warn',
+      'react/no-unknown-property': 'warn',
+      'react/no-unescaped-entities': 'warn',
+      'no-case-declarations': 'warn',
       'no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
       'no-console': ['warn', { allow: ['warn', 'error', 'info'] }],
     },

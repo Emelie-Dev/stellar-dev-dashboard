@@ -2,8 +2,7 @@
  * Zustand store tests (#99)
  *
  * Each test resets the store to its baseline before running so they remain
- * independent. Resolution order in vitest config favours .js, so this file
- * exercises whichever store implementation the app actually loads.
+ * independent. Resolve order now favours .ts before .js, matching Vite.
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';

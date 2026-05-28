@@ -5,6 +5,7 @@ import {
   fetchAccount,
   fetchTransactions,
   fetchOperations,
+  resolveAddress,
 } from '../../lib/stellar'
 import { useResponsive } from '../../hooks/useResponsive'
 import { ResponsiveGrid } from '../layout/ResponsiveContainer'
@@ -21,9 +22,16 @@ const FEATURES: FeatureTile[] = [
   { icon: '◻', label: 'Soroban Contracts', desc: 'Contract data & interaction' },
 ]
 
+interface AddressInfo {
+  masterAccount: string
+  muxedId?: string
+  federated?: string
+}
+
 export default function ConnectPanel() {
   const [input, setInput] = useState<string>('')
   const [error, setError] = useState<string>('')
+  const [addressInfo, setAddressInfo] = useState<AddressInfo | null>(null)
   const { isMobile, isTablet } = useResponsive()
   const {
     network,
@@ -44,20 +52,41 @@ export default function ConnectPanel() {
   async function handleConnect(): Promise<void> {
     const addr = input.trim()
     if (!isValidPublicKey(addr)) {
-      setError('Invalid Stellar public key')
+      setError('Invalid Stellar address. Supported formats: G... (Ed25519), M... (muxed), or name*domain (federated)')
+      setAddressInfo(null)
       return
     }
     setError('')
     setAccountLoading(true)
+    
     try {
-      const account = await fetchAccount(addr, network)
-      setConnectedAddress(addr)
+      // Resolve the address (handles G, M, and federated formats)
+      const resolved = await resolveAddress(addr, network)
+      
+      if (!resolved) {
+        setError('Failed to resolve address')
+        setAddressInfo(null)
+        setAccountLoading(false)
+        return
+      }
+
+      // Store the resolved address info
+      setAddressInfo({
+        masterAccount: resolved.accountId,
+        muxedId: resolved.muxedId,
+        federated: resolved.federatedAddress,
+      })
+
+      // Fetch account data for the master account
+      const account = await fetchAccount(resolved.accountId, network)
+      setConnectedAddress(resolved.accountId)
       setAccountData(account)
       setActiveTab('overview')
 
       setTxLoading(true)
       setOpsLoading(true)
-      fetchTransactions(addr, network)
+      
+      fetchTransactions(resolved.accountId, network)
         .then(({ records, nextCursor, hasMore }) => {
           setTransactions(records)
           setTxNextCursor(nextCursor)
@@ -72,7 +101,7 @@ export default function ConnectPanel() {
           setTxLoading(false)
         })
 
-      fetchOperations(addr, network)
+      fetchOperations(resolved.accountId, network)
         .then(({ records, nextCursor, hasMore }) => {
           setOperations(records)
           setOpsNextCursor(nextCursor)
@@ -86,8 +115,9 @@ export default function ConnectPanel() {
         .finally(() => {
           setOpsLoading(false)
         })
-    } catch {
-      setError('Account not found on ' + network)
+    } catch (err) {
+      setError((err as Error)?.message || 'Account not found on ' + network)
+      setAddressInfo(null)
     } finally {
       setAccountLoading(false)
     }
@@ -118,6 +148,22 @@ export default function ConnectPanel() {
     fontSize: isMobile ? '16px' : '20px',
     color: 'var(--text-secondary)',
     fontWeight: 500,
+  }
+
+  const addressLabelStyles: CSSProperties = {
+    fontSize: isMobile ? '13px' : '12px',
+    color: 'var(--text-muted)',
+    marginTop: '16px',
+    padding: isMobile ? '12px 20px' : '0',
+  }
+
+  const addressDisplayStyles: CSSProperties = {
+    fontSize: isMobile ? '12px' : '11px',
+    color: 'var(--cyan)',
+    marginTop: '4px',
+    padding: isMobile ? '0 20px' : '0',
+    fontFamily: 'var(--font-mono)',
+    wordBreak: 'break-all',
   }
 
   const inputContainerStyles: CSSProperties = {
@@ -178,7 +224,7 @@ export default function ConnectPanel() {
             padding: isMobile ? '0 20px' : '0',
           }}
         >
-          Enter a public key to explore accounts, transactions & contracts
+          Enter a Stellar address: G... • M... • name*domain
         </div>
       </div>
 
@@ -191,7 +237,7 @@ export default function ConnectPanel() {
               setError('')
             }}
             onKeyDown={handleKeyDown}
-            placeholder="G... public key"
+            placeholder="G... public key, M... muxed, or name*domain"
             style={inputStyles}
           />
           <button
@@ -218,6 +264,24 @@ export default function ConnectPanel() {
             }}
           >
             ✗ {error}
+          </div>
+        )}
+        {addressInfo && (
+          <div style={addressLabelStyles}>
+            <div>Master Account:</div>
+            <div style={addressDisplayStyles}>{addressInfo.masterAccount}</div>
+            {addressInfo.muxedId && (
+              <>
+                <div style={{ marginTop: '8px' }}>Muxed ID:</div>
+                <div style={addressDisplayStyles}>{addressInfo.muxedId}</div>
+              </>
+            )}
+            {addressInfo.federated && (
+              <>
+                <div style={{ marginTop: '8px' }}>Federated Address:</div>
+                <div style={addressDisplayStyles}>{addressInfo.federated}</div>
+              </>
+            )}
           </div>
         )}
       </div>

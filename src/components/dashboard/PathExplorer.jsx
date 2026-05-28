@@ -183,7 +183,7 @@ function Metric({ label, value, accent }) {
 }
 
 export default function PathExplorer() {
-  const { network } = useStore()
+  const { network, setActiveTab } = useStore()
   const [sourceAsset, setSourceAsset] = useState(null)
   const [destAsset, setDestAsset] = useState(null)
   const [amount, setAmount] = useState('')
@@ -231,6 +231,20 @@ export default function PathExplorer() {
   }
 
   const canSearch = sourceAsset && destAsset && amount && parseFloat(amount) > 0
+
+  function assetToPoolString(asset) {
+    if (!asset || asset.type === 'native') return 'native'
+    return `${asset.code}:${asset.issuer}`
+  }
+
+  function openLiquidityPools() {
+    if (!sourceAsset || !destAsset) return
+    sessionStorage.setItem('dex:poolPair', JSON.stringify({
+      assetA: assetToPoolString(sourceAsset),
+      assetB: assetToPoolString(destAsset),
+    }))
+    setActiveTab('dex')
+  }
 
   const modeToggle = (m, label) => (
     <button
@@ -368,8 +382,26 @@ export default function PathExplorer() {
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <div style={{ fontSize: '11px', color: 'var(--text-muted)', letterSpacing: '1px', textTransform: 'uppercase' }}>
-              {paths.length} path{paths.length !== 1 ? 's' : ''} found — sorted by best rate
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)', letterSpacing: '1px', textTransform: 'uppercase' }}>
+                {paths.length} path{paths.length !== 1 ? 's' : ''} found — sorted by best rate
+              </div>
+              <button
+                onClick={openLiquidityPools}
+                style={{
+                  padding: '6px 12px',
+                  fontSize: '12px',
+                  fontFamily: 'var(--font-mono)',
+                  background: 'var(--cyan-glow)',
+                  border: '1px solid var(--cyan-dim)',
+                  color: 'var(--cyan)',
+                  borderRadius: 'var(--radius-sm)',
+                  cursor: 'pointer',
+                  transition: 'var(--transition)',
+                }}
+              >
+                Inspect Pools
+              </button>
             </div>
             {paths.map((p, i) => <PathCard key={i} path={p} mode={mode} index={i} />)}
           </div>

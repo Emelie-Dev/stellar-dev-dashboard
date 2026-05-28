@@ -7,8 +7,6 @@ import type {
 } from './stellar'
 import type { Horizon, SorobanRpc } from '@stellar/stellar-sdk'
 
-// ─── State shape ──────────────────────────────────────────────────────────────
-
 export interface SearchFilters {
   status: 'all' | 'success' | 'failed'
   memoOnly: boolean
@@ -17,12 +15,33 @@ export interface SearchFilters {
   type: string
 }
 
+export interface ComparisonSlot { // ported
+  key: string
+  data: Horizon.AccountResponse | null
+  loading: boolean
+  error: string | null
+}
+
+export interface Notification { // ported
+  id: string
+  type: string
+  title: string
+  [key: string]: unknown
+}
+
+export interface StreamLedger { // ported
+  sequence: number
+  [key: string]: unknown
+}
+
+const THEME_STORAGE_KEY = 'stellar-dashboard-theme'
+
 export interface StoreState {
   // Network
   network: NetworkName
   setNetwork: (network: NetworkName) => void
 
-  // UI State
+  // UI State (updated)
   theme: 'light' | 'dark'
   toggleTheme: () => void
   isMobileMenuOpen: boolean
@@ -67,7 +86,7 @@ export interface StoreState {
   // Network stats
   networkStats: NetworkStats | null
   statsLoading: boolean
-  setNetworkStats: (stats: NetworkStats) => void
+  setNetworkStats: (stats: NetworkStats | ((prev: NetworkStats | null) => NetworkStats)) => void
   setStatsLoading: (v: boolean) => void
 
   // Active tab
@@ -96,15 +115,15 @@ export interface StoreState {
   multiSigMode: boolean
   setMultiSigMode: (v: boolean) => void
 
-  // Template state (#148)
+  // Template state
   selectedTemplateId: string | null
   setSelectedTemplateId: (id: string | null) => void
 
-  // Preferences panel (#142)
+  // Preferences panel
   preferencesOpen: boolean
   setPreferencesOpen: (open: boolean) => void
 
-  // Error state (#144)
+  // Error state
   globalError: { message: string; category: string } | null
   setGlobalError: (err: { message: string; category: string } | null) => void
 
@@ -119,10 +138,43 @@ export interface StoreState {
   // Search Filters
   searchFilters: SearchFilters
   setSearchFilters: (filters: Partial<SearchFilters>) => void
+
+  // Comparison slots (ported)
+  comparisonSlots: ComparisonSlot[]
+  addComparisonSlot: () => void
+  removeComparisonSlot: (index: number) => void
+  reorderComparisonSlots: (orderedSlots: ComparisonSlot[]) => void
+  setComparisonKey: (index: number, key: string) => void
+  setComparisonData: (index: number, data: Horizon.AccountResponse | null) => void
+  setComparisonLoading: (index: number, loading: boolean) => void
+  setComparisonError: (index: number, error: string | null) => void
+
+  // Wallet state (ported)
+  walletConnected: boolean
+  walletType: string | null
+  walletPublicKey: string | null
+  setWalletConnected: (connected: boolean, type?: string | null, publicKey?: string | null) => void
+  disconnectWallet: () => void
+
+  // Notifications (ported)
+  notifications: Notification[]
+  addNotification: (notification: Notification) => void
+  removeNotification: (id: string) => void
+
+  // Streaming (ported)
+  streamStatus: string
+  streamLedgers: StreamLedger[]
+  streamError: string | null
+  setStreamStatus: (status: string) => void
+  addStreamLedger: (ledger: StreamLedger) => void
+  clearStreamLedgers: () => void
+  setStreamError: (e: string | null) => void
 }
 
 // ─── Persisted keys ───────────────────────────────────────────────────────────
-const PERSIST_KEYS: Array<keyof StoreState> = ['network', 'theme', 'activeTab', 'savedSearches', 'multiSigMode', 'searchFilters']
+const PERSIST_KEYS: Array<keyof StoreState> = [
+  'network', 'theme', 'activeTab', 'savedSearches', 'multiSigMode', 'searchFilters',
+]
 const STORE_PERSIST_KEY = 'store:preferences'
 
 // ─── Store ────────────────────────────────────────────────────────────────────
@@ -145,9 +197,18 @@ export const useStore = create<StoreState>((set, get) => ({
     })
   },
 
-  // UI State
+  // UI State (updated)
   theme: 'dark',
-  toggleTheme: () => set((state) => ({ theme: state.theme === 'light' ? 'dark' : 'light' })),
+  toggleTheme: () => set((state) => {
+    const newTheme = state.theme === 'light' ? 'dark' : 'light'
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(THEME_STORAGE_KEY, newTheme)
+    }
+    if (typeof document !== 'undefined') {
+      document.documentElement.setAttribute('data-theme', newTheme)
+    }
+    return { theme: newTheme }
+  }),
   isMobileMenuOpen: false,
   setMobileMenuOpen: (open) => set({ isMobileMenuOpen: open }),
 
@@ -195,10 +256,12 @@ export const useStore = create<StoreState>((set, get) => ({
   setOpsHasMore: (hasMore) => set({ opsHasMore: hasMore }),
   setOpsPagingLoading: (v) => set({ opsPagingLoading: v }),
 
-  // Network stats
+  // Network stats (updated)
   networkStats: null,
   statsLoading: false,
-  setNetworkStats: (stats) => set({ networkStats: stats }),
+  setNetworkStats: (stats) => set((state) => ({
+    networkStats: typeof stats === 'function' ? stats(state.networkStats) : stats
+  })),
   setStatsLoading: (v) => set({ statsLoading: v }),
 
   // Active tab
@@ -227,15 +290,15 @@ export const useStore = create<StoreState>((set, get) => ({
   multiSigMode: false,
   setMultiSigMode: (v) => set({ multiSigMode: v }),
 
-  // Template state (#148)
+  // Template state
   selectedTemplateId: null,
   setSelectedTemplateId: (id) => set({ selectedTemplateId: id }),
 
-  // Preferences panel (#142)
+  // Preferences panel
   preferencesOpen: false,
   setPreferencesOpen: (open) => set({ preferencesOpen: open }),
 
-  // Error state (#144)
+  // Error state
   globalError: null,
   setGlobalError: (err) => set({ globalError: err }),
 
@@ -258,6 +321,82 @@ export const useStore = create<StoreState>((set, get) => ({
   setSearchFilters: (filters) => set((state) => ({
     searchFilters: { ...state.searchFilters, ...filters }
   })),
+
+  // Comparison slots (ported)
+  comparisonSlots: [
+    { key: '', data: null, loading: false, error: null },
+    { key: '', data: null, loading: false, error: null },
+    { key: '', data: null, loading: false, error: null },
+  ],
+  addComparisonSlot: () => set((state) => {
+    if (state.comparisonSlots.length >= 5) return {}
+    return {
+      comparisonSlots: [...state.comparisonSlots, { key: '', data: null, loading: false, error: null }]
+    }
+  }),
+  removeComparisonSlot: (index) => set((state) => {
+    if (state.comparisonSlots.length <= 2) return {}
+    const slots = [...state.comparisonSlots]
+    slots.splice(index, 1)
+    return { comparisonSlots: slots }
+  }),
+  reorderComparisonSlots: (orderedSlots) => set({ comparisonSlots: orderedSlots }),
+  setComparisonKey: (index, key) => set((state) => {
+    const slots = [...state.comparisonSlots]
+    slots[index] = { ...slots[index], key, error: null, data: null }
+    return { comparisonSlots: slots }
+  }),
+  setComparisonData: (index, data) => set((state) => {
+    const slots = [...state.comparisonSlots]
+    slots[index] = { ...slots[index], data }
+    return { comparisonSlots: slots }
+  }),
+  setComparisonLoading: (index, loading) => set((state) => {
+    const slots = [...state.comparisonSlots]
+    slots[index] = { ...slots[index], loading }
+    return { comparisonSlots: slots }
+  }),
+  setComparisonError: (index, error) => set((state) => {
+    const slots = [...state.comparisonSlots]
+    slots[index] = { ...slots[index], error, data: null }
+    return { comparisonSlots: slots }
+  }),
+
+  // Wallet state (ported)
+  walletConnected: false,
+  walletType: null,
+  walletPublicKey: null,
+  setWalletConnected: (connected, type, publicKey) => set({
+    walletConnected: connected,
+    walletType: type || null,
+    walletPublicKey: publicKey || null,
+  }),
+  disconnectWallet: () => set({
+    walletConnected: false,
+    walletType: null,
+    walletPublicKey: null,
+  }),
+
+  // Notifications (ported)
+  notifications: [],
+  addNotification: (notification) => set((state) => ({
+    notifications: [...state.notifications, notification]
+  })),
+  removeNotification: (id) => set((state) => ({
+    notifications: state.notifications.filter(n => n.id !== id)
+  })),
+
+  // Streaming (ported)
+  streamStatus: 'disconnected',
+  streamLedgers: [],
+  streamError: null,
+  setStreamStatus: (status) => set({ streamStatus: status }),
+  addStreamLedger: (ledger) => set((state) => {
+    if (state.streamLedgers.some(l => l.sequence === ledger.sequence)) return {}
+    return { streamLedgers: [ledger, ...state.streamLedgers.slice(0, 49)] }
+  }),
+  clearStreamLedgers: () => set({ streamLedgers: [] }),
+  setStreamError: (e) => set({ streamError: e }),
 }))
 
 // ─── Persistence middleware ───────────────────────────────────────────────────

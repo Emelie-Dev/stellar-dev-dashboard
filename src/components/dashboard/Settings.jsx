@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { useSettings } from "../../hooks/useSettings";
 import { useStore } from "../../lib/store";
 import { getEnvironmentConfig } from "../../lib/config";
@@ -13,21 +13,48 @@ function FieldLabel({ children }) {
   );
 }
 
+function ErrorMessage({ message }) {
+  if (!message) return null;
+  return (
+    <div style={{ 
+      fontSize: "11px", 
+      color: "var(--error)", 
+      marginTop: "4px",
+      padding: "6px 8px",
+      background: "rgba(255, 0, 0, 0.1)",
+      borderRadius: "var(--radius-sm)",
+      border: "1px solid var(--error)"
+    }}>
+      {message}
+    </div>
+  );
+}
+
 export default function Settings() {
+  const initialCustomHeaders = getCustomNetworkAuthHeaders();
+  const initialHeaderName = Object.keys(initialCustomHeaders)[0] || "Authorization";
   const { network, setNetwork, theme, toggleTheme } = useStore();
   const {
     profiles,
     activeProfile,
     activeProfileName,
-    setActiveProfile,
+    setActiveProfile: setConfigProfile,
     saveProfile,
     deleteProfile,
     preferences,
     setPreference,
   } = useSettings();
 
+  // Custom network profile state (Issue #188)
+  const [customProfiles, setCustomProfiles] = useState([]);
+  const [selectedProfileId, setSelectedProfileId] = useState(null);
   const [profileName, setProfileName] = useState("");
+  const [horizonUrl, setHorizonUrl] = useState("");
+  const [sorobanUrl, setSorobanUrl] = useState("");
+  const [passphrase, setPassphrase] = useState("");
+  const [validationErrors, setValidationErrors] = useState({});
   const [draftConfig, setDraftConfig] = useState(() => activeProfile.config);
+  const [apiKey, setApiKey] = useState(() => sessionStorage.getItem(SESSION_API_KEY) || "");
   const baseline = useMemo(() => getEnvironmentConfig(), []);
 
   // State for Alert Rules
@@ -50,7 +77,109 @@ export default function Settings() {
   function handleSaveProfile() {
     const name = profileName.trim() || activeProfileName;
     saveProfile(name, draftConfig);
+    setConfigProfileName("");
+  }
+
+  // Custom network profile handlers (Issue #188)
+  async function handleSaveNetworkProfile() {
+    const errors = {};
+    
+    // Validate inputs
+    const horizonVal = validateHorizonUrl(horizonUrl.trim());
+    if (!horizonVal.valid) errors.horizonUrl = horizonVal.errors[0];
+    
+    const sorobanVal = validateSorobanUrl(sorobanUrl.trim(), false);
+    if (!sorobanVal.valid) errors.sorobanUrl = sorobanVal.errors[0];
+    
+    const passphraseVal = validateNetworkPassphrase(passphrase.trim(), true);
+    if (!passphraseVal.valid) errors.passphrase = passphraseVal.errors[0];
+    
+    if (!profileName.trim()) {
+      errors.profileName = "Profile name is required";
+    }
+    
+    if (Object.keys(errors).length > 0) {
+      setValidationErrors(errors);
+      return;
+    }
+    
+    try {
+      const saved = await saveNetworkProfile({
+        id: selectedProfileId,
+        name: profileName.trim(),
+        horizonUrl: horizonUrl.trim(),
+        sorobanUrl: sorobanUrl.trim() || undefined,
+        passphrase: passphrase.trim(),
+      });
+      
+      // Reload profiles
+      const updated = await loadNetworkProfiles();
+      setCustomProfiles(updated);
+      
+      // Reset form
+      setProfileName("");
+      setHorizonUrl("");
+      setSorobanUrl("");
+      setPassphrase("");
+      setSelectedProfileId(null);
+      setValidationErrors({});
+    } catch (err) {
+      setValidationErrors({ submit: err.message });
+    }
+  }
+
+  async function handleDeleteNetworkProfile(profileId) {
+    try {
+      await deleteNetworkProfile(profileId);
+      const updated = await loadNetworkProfiles();
+      setCustomProfiles(updated);
+      if (selectedProfileId === profileId) {
+        setSelectedProfileId(null);
+        setProfileName("");
+        setHorizonUrl("");
+        setSorobanUrl("");
+        setPassphrase("");
+      }
+    } catch (err) {
+      setValidationErrors({ delete: err.message });
+    }
+  }
+
+  function handleSelectProfile(profile) {
+    setSelectedProfileId(profile.id);
+    setProfileName(profile.name);
+    setHorizonUrl(profile.horizonUrl);
+    setSorobanUrl(profile.sorobanUrl || "");
+    setPassphrase(profile.passphrase);
+    setValidationErrors({});
+  }
+
+  function handleClearForm() {
+    setSelectedProfileId(null);
     setProfileName("");
+    setHorizonUrl("");
+    setSorobanUrl("");
+    setPassphrase("");
+    setValidationErrors({});
+  }
+
+  async function handleSwitchProfile(profileId) {
+    try {
+      await setActiveProfile(profileId);
+      // In a real app, this would trigger a re-render via a hook
+      // For now, we'll just show a success message
+      alert("Profile switched successfully!");
+    } catch (err) {
+      setValidationErrors({ switch: err.message });
+    }
+  }
+
+  function updateCustomHeader(name, value) {
+    setCustomHeaderName(name);
+    setCustomHeaderValue(value);
+    updateCustomNetworkConfig({
+      headers: name.trim() && value.trim() ? { [name.trim()]: value.trim() } : {},
+    });
   }
 
   async function handleAddAlertRule() {
@@ -281,7 +410,7 @@ export default function Settings() {
           <select
             value={activeProfileName}
             onChange={(event) => {
-              setActiveProfile(event.target.value);
+              setConfigProfile(event.target.value);
               const selected = profiles.find((profile) => profile.name === event.target.value);
               setDraftConfig(selected?.config || getEnvironmentConfig());
             }}
@@ -351,8 +480,8 @@ export default function Settings() {
 
         <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
           <input
-            value={profileName}
-            onChange={(event) => setProfileName(event.target.value)}
+            value={configProfileName}
+            onChange={(event) => setConfigProfileName(event.target.value)}
             placeholder="Profile name"
             style={{
               padding: "8px",
@@ -365,7 +494,7 @@ export default function Settings() {
             }}
           />
           <button
-            onClick={handleSaveProfile}
+            onClick={handleSaveConfigProfile}
             style={{
               padding: "8px 10px",
               borderRadius: "var(--radius-sm)",
@@ -378,6 +507,51 @@ export default function Settings() {
             Save Profile
           </button>
         </div>
+      </div>
+
+      {/* Custom Horizon API Key */}
+      <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: "14px", display: "flex", flexDirection: "column", gap: "10px" }}>
+        <FieldLabel>Custom Horizon API Key</FieldLabel>
+        <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>
+          Sent as <code>Authorization: Bearer …</code> on custom network requests. Stored in sessionStorage only — cleared on tab close.
+        </div>
+        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+          <input
+            type="password"
+            value={apiKey}
+            onChange={(e) => handleApiKeyChange(e.target.value)}
+            placeholder="Paste API key…"
+            autoComplete="off"
+            style={{
+              flex: 1,
+              padding: "8px",
+              borderRadius: "var(--radius-sm)",
+              border: "1px solid var(--border)",
+              background: "var(--bg-elevated)",
+              color: "var(--text-primary)",
+              fontFamily: "var(--font-mono)",
+              fontSize: "12px",
+            }}
+          />
+          {apiKey && (
+            <button
+              onClick={() => handleApiKeyChange("")}
+              style={{
+                padding: "8px 10px",
+                borderRadius: "var(--radius-sm)",
+                border: "1px solid var(--border)",
+                background: "var(--bg-elevated)",
+                color: "var(--text-secondary)",
+                fontSize: "12px",
+              }}
+            >
+              Clear
+            </button>
+          )}
+        </div>
+        {apiKey && (
+          <div style={{ fontSize: "11px", color: "var(--green)" }}>✓ API key active</div>
+        )}
       </div>
     </div>
   );

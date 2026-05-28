@@ -10,7 +10,10 @@ export default function AddressBook() {
 
   const handleAdd = async () => {
     if (!form.label.trim()) { setError('Label is required'); return }
-    if (!isValidPublicKey(form.address.trim())) { setError('Invalid Stellar public key'); return }
+    if (!isValidPublicKey(form.address.trim())) { 
+      setError('Invalid Stellar address. Use G... (Ed25519), M... (muxed), or name*domain (federated)')
+      return 
+    }
     setError('')
     await addAddress({ label: form.label.trim(), address: form.address.trim(), network: form.network })
     setForm({ label: '', address: '', network: 'testnet' })
@@ -40,7 +43,7 @@ export default function AddressBook() {
         <input
           value={form.address}
           onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
-          placeholder="G... Stellar public key"
+          placeholder="G... public key, M... muxed, or name*domain federated"
           style={inputStyle}
         />
         <select

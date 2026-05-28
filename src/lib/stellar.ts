@@ -23,6 +23,7 @@ export interface NetworkConfig {
   sorobanUrl?: string
   passphrase: string
   faucetUrl?: string
+  customHeaders?: Record<string, string>
 }
 
 export const NETWORKS: Record<NetworkName, NetworkConfig> = {
@@ -57,29 +58,103 @@ export const NETWORKS: Record<NetworkName, NetworkConfig> = {
     horizonUrl: '',
     sorobanUrl: '',
     passphrase: '',
+    headers: {},
   },
 }
 
 const COINGECKO_XLM_PRICE_URL = 'https://api.coingecko.com/api/v3/simple/price?ids=stellar&vs_currencies=usd'
+const CUSTOM_NETWORK_HEADERS_KEY = 'stellar-custom-network-headers'
+
+function getSessionStorage(): Storage | null {
+  if (typeof window === 'undefined') return null
+  return window.sessionStorage || null
+}
+
+function normalizeHeaders(headers: Record<string, string> = {}): Record<string, string> {
+  return Object.entries(headers).reduce<Record<string, string>>((acc, [name, value]) => {
+    const trimmedName = String(name || '').trim()
+    const trimmedValue = String(value || '').trim()
+    if (trimmedName && trimmedValue) {
+      acc[trimmedName] = trimmedValue
+    }
+    return acc
+  }, {})
+}
+
+export function getCustomNetworkAuthHeaders(): Record<string, string> {
+  const storage = getSessionStorage()
+  if (!storage) return NETWORKS.custom.headers || {}
+
+  try {
+    const raw = storage.getItem(CUSTOM_NETWORK_HEADERS_KEY)
+    const headers = raw ? normalizeHeaders(JSON.parse(raw)) : {}
+    NETWORKS.custom.headers = headers
+    return headers
+  } catch {
+    return NETWORKS.custom.headers || {}
+  }
+}
+
+function saveCustomNetworkAuthHeaders(headers: Record<string, string>) {
+  const normalized = normalizeHeaders(headers)
+  NETWORKS.custom.headers = normalized
+
+  const storage = getSessionStorage()
+  if (!storage) return
+
+  if (Object.keys(normalized).length) {
+    storage.setItem(CUSTOM_NETWORK_HEADERS_KEY, JSON.stringify(normalized))
+  } else {
+    storage.removeItem(CUSTOM_NETWORK_HEADERS_KEY)
+  }
+}
+
+function getNetworkHeaders(network: NetworkName): Record<string, string> {
+  if (network === 'custom') return getCustomNetworkAuthHeaders()
+  return NETWORKS[network].headers || {}
+}
+
+function withNetworkHeaders(options: RequestInit = {}, network: NetworkName): RequestInit {
+  const headers = getNetworkHeaders(network)
+  if (!Object.keys(headers).length) return options
+
+  return {
+    ...options,
+    headers: {
+      ...(options.headers as Record<string, string> | undefined),
+      ...headers,
+    },
+  }
+}
+
+function getServerOptions(network: NetworkName) {
+  const headers = getNetworkHeaders(network)
+  return Object.keys(headers).length ? { headers } : undefined
+}
 
 // ─── Rate Limited Fetch Wrapper ───────────────────────────────────────────────
 
-async function rateLimitedFetch(url: string, options?: RequestInit, priority: 'high' | 'medium' | 'low' = 'medium'): Promise<Response> {
+async function rateLimitedFetch(url: string, options?: RequestInit, priority: 'high' | 'medium' | 'low' = 'medium', extraHeaders?: Record<string, string>): Promise<Response> {
   const startTime = Date.now()
   
+  // Merge custom network headers (e.g. API keys) without mutating caller options
+  const mergedOptions: RequestInit = extraHeaders && Object.keys(extraHeaders).length > 0
+    ? { ...options, headers: { ...(options?.headers as Record<string, string> | undefined), ...extraHeaders } }
+    : options ?? {}
+  
   try {
-    // Log the API call
-    auditTrail.logAPICall(url, options?.method || 'GET', options, {})
+    // Log the API call (options without secret headers — sanitized by auditTrail)
+    auditTrail.logAPICall(url, mergedOptions.method || 'GET', mergedOptions, {})
     
     // Check rate limits first
     const check = rateLimiter.checkRequest('stellar_client', rateLimiter.extractEndpoint(url))
     
     if (!check.allowed) {
       // Queue the request if rate limited
-      const response = await rateLimiter.queueRequest({ url, options, priority }, 'stellar_client')
+      const response = await rateLimiter.queueRequest({ url, options: mergedOptions, priority }, 'stellar_client')
       const responseTime = Date.now() - startTime
       
-      auditTrail.logAPICall(url, options?.method || 'GET', options, { 
+      auditTrail.logAPICall(url, mergedOptions.method || 'GET', mergedOptions, { 
         status: response.status,
         responseTime,
         queued: true
@@ -89,10 +164,10 @@ async function rateLimitedFetch(url: string, options?: RequestInit, priority: 'h
     }
     
     // Execute request immediately if allowed
-    const response = await fetch(url, options)
+    const response = await fetch(url, mergedOptions)
     const responseTime = Date.now() - startTime
     
-    auditTrail.logAPICall(url, options?.method || 'GET', options, { 
+    auditTrail.logAPICall(url, mergedOptions.method || 'GET', mergedOptions, { 
       status: response.status,
       responseTime,
       queued: false
@@ -101,7 +176,7 @@ async function rateLimitedFetch(url: string, options?: RequestInit, priority: 'h
     return response
     
   } catch (error) {
-    auditTrail.logError(error as Error, { url, options, operation: 'rateLimitedFetch' })
+    auditTrail.logError(error as Error, { url, operation: 'rateLimitedFetch' })
     throw error
   }
 }
@@ -113,12 +188,51 @@ export function getNetworkDetails(network: NetworkName): NetworkConfig {
 }
 
 export function updateCustomNetworkConfig(config: Partial<NetworkConfig>) {
-  Object.assign(NETWORKS.custom, config)
+  const { headers, ...networkConfig } = config
+  Object.assign(NETWORKS.custom, networkConfig)
+  if (headers) saveCustomNetworkAuthHeaders(headers)
+}
+
+/**
+ * Switch to a custom network profile (Issue #188).
+ * Updates NETWORKS.custom with profile data and creates new clients.
+ */
+export async function switchToCustomProfile(profileId: string): Promise<void> {
+  const { getNetworkProfile } = await import('./userPreferences')
+  const profile = await getNetworkProfile(profileId)
+  
+  if (!profile) {
+    throw new Error(`Network profile "${profileId}" not found`)
+  }
+  
+  // Update the custom network config
+  updateCustomNetworkConfig({
+    name: profile.name,
+    horizonUrl: profile.horizonUrl,
+    sorobanUrl: profile.sorobanUrl,
+    passphrase: profile.passphrase,
+  })
+}
+
+/**
+ * Load profiles from storage and return them (Issue #188).
+ */
+export async function loadCustomNetworkProfiles() {
+  const { loadNetworkProfiles } = await import('./userPreferences')
+  return loadNetworkProfiles()
+}
+
+/** Returns the custom headers configured for a network (only 'custom' supports them). */
+export function getNetworkHeaders(network: NetworkName): Record<string, string> | undefined {
+  return NETWORKS[network].customHeaders
 }
 
 export function getServer(network: NetworkName = 'testnet'): StellarSdk.Horizon.Server {
   const config = NETWORKS[network]
-  return new StellarSdk.Horizon.Server(config.horizonUrl || NETWORKS.testnet.horizonUrl)
+  return new StellarSdk.Horizon.Server(
+    config.horizonUrl || NETWORKS.testnet.horizonUrl,
+    getServerOptions(network),
+  )
 }
 
 export function getSorobanServer(network: NetworkName = 'testnet'): StellarSdk.SorobanRpc.Server {
@@ -126,7 +240,10 @@ export function getSorobanServer(network: NetworkName = 'testnet'): StellarSdk.S
   if (network === 'custom' && !config.sorobanUrl) {
     throw new Error('Custom Soroban RPC URL not configured')
   }
-  return new StellarSdk.SorobanRpc.Server(config.sorobanUrl || NETWORKS.testnet.sorobanUrl!)
+  return new StellarSdk.SorobanRpc.Server(
+    config.sorobanUrl || NETWORKS.testnet.sorobanUrl!,
+    getServerOptions(network),
+  )
 }
 
 // ─── Account ──────────────────────────────────────────────────────────────────
@@ -419,7 +536,10 @@ export async function fetchAssetPrice(
     buying_asset_type: 'native',
   })
 
-  const response = await fetch(`${NETWORKS[network].horizonUrl}/order_book?${params.toString()}`)
+  const response = await fetch(
+    `${NETWORKS[network].horizonUrl}/order_book?${params.toString()}`,
+    withNetworkHeaders({}, network),
+  )
 
   if (!response.ok) {
     throw new Error(`Order book request failed: ${response.status}`)
@@ -554,7 +674,9 @@ function serializeDiagnosticEvent(
   return {
     inSuccessfulContractCall: event.inSuccessfulContractCall(),
     type: contractEvent.type().name || contractEvent.type().toString(),
-    contractId: contractId ? StellarSdk.Address.fromScAddress(contractId).toString() : null,
+    contractId: contractId
+      ? StellarSdk.Address.fromScAddress(contractId as unknown as StellarSdk.xdr.ScAddress).toString()
+      : null,
     topics: body.topics().map(serializeScVal),
     value: serializeScVal(body.data()),
   }
@@ -733,8 +855,201 @@ export async function invokeContract(
 
 // ─── Validators ───────────────────────────────────────────────────────────────
 
-export function isValidPublicKey(key: string): boolean {
+/**
+ * Check if address is a valid Ed25519 public key (G...)
+ */
+export function isValidEd25519PublicKey(key: string): boolean {
   return StellarSdk.StrKey.isValidEd25519PublicKey(key)
+}
+
+/**
+ * Check if address is a valid muxed account (M...)
+ */
+export function isValidMuxedAccount(key: string): boolean {
+  try {
+    return StellarSdk.StrKey.isValidMuxedAccount(key)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Check if address is a federated address (name*domain)
+ */
+export function isFederatedAddress(input: string): boolean {
+  return typeof input === 'string' && /^[a-zA-Z0-9._-]+\*[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(input)
+}
+
+/**
+ * Extract master account and muxed ID from a muxed address
+ */
+export function parseMuxedAccount(muxedAddress: string): { masterAccount: string; muxedId: string } | null {
+  try {
+    const muxed = StellarSdk.MuxedAccount.fromString(muxedAddress)
+    return {
+      masterAccount: muxed.baseAccount().accountId(),
+      muxedId: muxed.id
+    }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Resolve a federated address to a Stellar account via Horizon federation endpoint
+ */
+export async function resolveFederatedAddress(
+  federatedAddress: string,
+  network: NetworkName = 'testnet'
+): Promise<{ accountId: string; memoId?: string; memoType?: string } | null> {
+  try {
+    const server = getServer(network)
+    
+    // Parse the federated address (name*domain)
+    const [name, domain] = federatedAddress.split('*')
+    
+    if (!name || !domain) {
+      return null
+    }
+
+    // Fetch the federation record from the domain's .well-known/stellar.toml
+    const federationUrl = `https://${domain}/.well-known/stellar.toml`
+    
+    let tomlData: Record<string, any> = {}
+    try {
+      const tomlResponse = await rateLimitedFetch(federationUrl)
+      if (!tomlResponse.ok) {
+        // Try using Horizon federation endpoint as fallback
+        try {
+          const result = await server.federation().resolveAddress(federatedAddress)
+          return result as any
+        } catch {
+          return null
+        }
+      }
+      
+      // Parse TOML (basic parsing for FEDERATION_SERVER URL)
+      const tomlText = await tomlResponse.text()
+      const federationServerMatch = tomlText.match(/FEDERATION_SERVER\s*=\s*"([^"]+)"/)
+      if (federationServerMatch) {
+        tomlData.federationServer = federationServerMatch[1]
+      }
+    } catch {
+      // Fallback to Horizon federation endpoint
+      try {
+        const result = await server.federation().resolveAddress(federatedAddress)
+        return result as any
+      } catch {
+        return null
+      }
+    }
+
+    // Use the federation server URL if found
+    if (tomlData.federationServer) {
+      const federationEndpoint = new URL(tomlData.federationServer)
+      federationEndpoint.searchParams.append('q', federatedAddress)
+      federationEndpoint.searchParams.append('type', 'name')
+
+      const response = await rateLimitedFetch(federationEndpoint.toString())
+      if (response.ok) {
+        return await response.json()
+      }
+    }
+
+    // Fallback to Horizon federation endpoint
+    try {
+      const result = await server.federation().resolveAddress(federatedAddress)
+      return result as any
+    } catch {
+      return null
+    }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Comprehensive address resolver
+ * Accepts: G... (Ed25519), M... (muxed), or name*domain (federated)
+ * Returns: master account ID, muxed ID (if applicable), and original input info
+ */
+export interface ResolvedAddress {
+  accountId: string           // The master account ID (always G...)
+  muxedId?: string           // Muxed ID if input was M...
+  originalInput: string      // Original input provided
+  inputType: 'ed25519' | 'muxed' | 'federated'
+  federatedAddress?: string  // Original federated address if applicable
+  memoId?: string            // Memo ID from federation resolution
+  memoType?: string          // Memo type from federation resolution
+}
+
+export async function resolveAddress(
+  input: string,
+  network: NetworkName = 'testnet'
+): Promise<ResolvedAddress | null> {
+  if (!input || typeof input !== 'string') {
+    return null
+  }
+
+  const trimmedInput = input.trim()
+
+  // Try Ed25519 public key (G...)
+  if (isValidEd25519PublicKey(trimmedInput)) {
+    return {
+      accountId: trimmedInput,
+      originalInput: trimmedInput,
+      inputType: 'ed25519',
+    }
+  }
+
+  // Try muxed account (M...)
+  if (isValidMuxedAccount(trimmedInput)) {
+    const parsed = parseMuxedAccount(trimmedInput)
+    if (parsed) {
+      return {
+        accountId: parsed.masterAccount,
+        muxedId: parsed.muxedId,
+        originalInput: trimmedInput,
+        inputType: 'muxed',
+      }
+    }
+  }
+
+  // Try federated address (name*domain)
+  if (isFederatedAddress(trimmedInput)) {
+    const resolved = await resolveFederatedAddress(trimmedInput, network)
+    if (resolved?.accountId) {
+      return {
+        accountId: resolved.accountId,
+        originalInput: trimmedInput,
+        inputType: 'federated',
+        federatedAddress: trimmedInput,
+        memoId: resolved.memoId,
+        memoType: resolved.memoType,
+      }
+    }
+  }
+
+  return null
+}
+
+/**
+ * Validate any supported address format (legacy function name for backward compatibility)
+ */
+export function isValidPublicKey(key: string): boolean {
+  if (!key || typeof key !== 'string') return false
+  const trimmed = key.trim()
+  
+  // Check G... Ed25519
+  if (isValidEd25519PublicKey(trimmed)) return true
+  
+  // Check M... muxed
+  if (isValidMuxedAccount(trimmed)) return true
+  
+  // Check name*domain federated
+  if (isFederatedAddress(trimmed)) return true
+  
+  return false
 }
 
 export function isValidContractId(id: string): boolean {
@@ -744,6 +1059,59 @@ export function isValidContractId(id: string): boolean {
   } catch {
     return false
   }
+}
+
+// ─── Claimable Balances ───────────────────────────────────────────────────────
+
+export interface ClaimableBalanceRecord {
+  id: string
+  asset: string
+  amount: string
+  sponsor: string
+  last_modified_ledger: number
+  claimants: Array<{
+    destination: string
+    predicate: Record<string, unknown>
+  }>
+}
+
+/** Human-readable summary of a claimant predicate. */
+export function formatClaimPredicate(predicate: Record<string, unknown>): string {
+  if (!predicate || Object.keys(predicate).length === 0) return 'Unconditional'
+  if ('unconditional' in predicate) return 'Unconditional'
+  if ('abs_before' in predicate) return `Before ${predicate.abs_before}`
+  if ('abs_after' in predicate) return `After ${predicate.abs_after}`
+  if ('rel_before' in predicate) return `Within ${predicate.rel_before}s of claim`
+  if ('and' in predicate) {
+    const parts = (predicate.and as Record<string, unknown>[]).map(formatClaimPredicate)
+    return parts.join(' AND ')
+  }
+  if ('or' in predicate) {
+    const parts = (predicate.or as Record<string, unknown>[]).map(formatClaimPredicate)
+    return parts.join(' OR ')
+  }
+  if ('not' in predicate) return `NOT (${formatClaimPredicate(predicate.not as Record<string, unknown>)})`
+  return JSON.stringify(predicate)
+}
+
+export async function fetchClaimableBalances(
+  publicKey: string,
+  network: NetworkName = 'testnet'
+): Promise<ClaimableBalanceRecord[]> {
+  const cacheKey = `claimable:${publicKey}:${network}`
+  const cached = stellarCache.get(cacheKey)
+  if (cached) return cached
+
+  const config = NETWORKS[network]
+  const url = `${config.horizonUrl}/claimable_balances?claimant=${encodeURIComponent(publicKey)}&limit=50`
+  const response = await rateLimitedFetch(url, undefined, 'medium', config.customHeaders)
+
+  if (!response.ok) throw new Error(`Horizon error ${response.status}`)
+
+  const data = await response.json()
+  const records: ClaimableBalanceRecord[] = data._embedded?.records ?? []
+  stellarCache.set(cacheKey, records, TTL.ACCOUNT, ['claimable', publicKey])
+  return records
 }
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
@@ -828,6 +1196,14 @@ export async function buildTransaction(
           startingBalance: op.startingBalance,
         })
       )
+    } else if (op.type === 'invokeHostFunction') {
+      // Simplified support for invocation for simulation purposes
+      txBuilder.addOperation(
+        StellarSdk.Operation.invokeHostFunction({
+          func: (op as any).func,
+          auth: (op as any).auth || [],
+        })
+      )
     }
   })
 
@@ -846,6 +1222,14 @@ export interface SimulateResult {
   success: boolean
   errors: string[]
   xdr?: string
+  sorobanMetrics?: {
+    footprint: {
+      readOnly: SerializedLedgerKey[]
+      readWrite: SerializedLedgerKey[]
+    }
+    resourceFee: string
+    events?: SerializedContractEvent[]
+  }
 }
 
 export async function simulateTransaction(
@@ -878,6 +1262,36 @@ export async function simulateTransaction(
     })
 
     const estimatedFee = params.baseFee * params.operations.length
+    
+    // Check if we should perform Soroban simulation
+    const hasSorobanOps = params.operations.some(op => op.type as string === 'invokeHostFunction')
+    let sorobanMetrics = undefined
+
+    if (hasSorobanOps || params.network !== 'mainnet') {
+      try {
+        const sorobanServer = getSorobanServer(params.network)
+        const simulation = await sorobanServer.simulateTransaction(transaction)
+        
+        if ('error' in simulation) {
+          errors.push(`Soroban simulation error: ${simulation.error}`)
+        } else {
+          const successfulSimulation = simulation as any
+          if (successfulSimulation.transactionData) {
+             sorobanMetrics = {
+               footprint: {
+                 readOnly: successfulSimulation.transactionData.getReadOnly().map(serializeLedgerKey),
+                 readWrite: successfulSimulation.transactionData.getReadWrite().map(serializeLedgerKey),
+               },
+               resourceFee: successfulSimulation.minResourceFee,
+               events: (successfulSimulation.events || []).map(serializeDiagnosticEvent)
+             }
+          }
+        }
+      } catch (e) {
+        // Fallback or ignore if Soroban simulation fails but we want basic results
+        console.warn('Soroban simulation failed:', e)
+      }
+    }
 
     return {
       fee: estimatedFee,
@@ -885,6 +1299,7 @@ export async function simulateTransaction(
       success: errors.length === 0,
       errors,
       xdr: transaction.toXDR(),
+      sorobanMetrics
     }
   } catch (error) {
     return {
@@ -989,6 +1404,13 @@ export function buildExecutionTrace(
         ? 'Simulation succeeded with no blocking errors.'
         : simulation.errors.join('; '),
     },
+    {
+      step: 'Soroban Resource Preview',
+      status: simulation.sorobanMetrics ? 'ok' : 'warning',
+      detail: simulation.sorobanMetrics 
+        ? `Footprint: ${simulation.sorobanMetrics.footprint.readOnly.length} RO, ${simulation.sorobanMetrics.footprint.readWrite.length} RW keys. Min fee: ${simulation.sorobanMetrics.resourceFee} stroops.`
+        : 'Soroban metrics not available for this transaction.',
+    }
   ]
 
   return steps
@@ -1095,6 +1517,149 @@ export interface FetchPaymentPathsParams {
   amount: string
   mode?: PathPaymentMode
   network?: NetworkName
+}
+
+// ─── Liquidity pools ─────────────────────────────────────────────────────────
+
+export interface LiquidityPoolReserve {
+  asset: string
+  amount: string
+}
+
+export interface LiquidityPoolRecord {
+  id: string
+  paging_token?: string
+  fee_bp?: number
+  type?: string
+  total_trustlines?: string | number
+  total_shares?: string
+  reserves?: LiquidityPoolReserve[]
+}
+
+export interface LiquidityPoolPosition {
+  poolId: string
+  balance: string
+  limit?: string
+  sharePercent: number
+  pool: LiquidityPoolRecord | null
+}
+
+interface AccountLiquidityPoolBalance {
+  asset_type: 'liquidity_pool_shares'
+  liquidity_pool_id: string
+  balance: string
+  limit?: string
+}
+
+function horizonUrl(network: NetworkName, path: string): string {
+  return `${NETWORKS[network]?.horizonUrl || NETWORKS.testnet.horizonUrl}${path}`
+}
+
+async function horizonJson<T>(network: NetworkName, path: string): Promise<T> {
+  const response = await fetch(horizonUrl(network, path))
+  if (!response.ok) throw new Error(`Horizon request failed: ${response.status}`)
+  return response.json() as Promise<T>
+}
+
+function poolAssetString(asset: PathAsset | string): string {
+  if (typeof asset === 'string') return asset === 'XLM' ? 'native' : asset
+  if (asset.type === 'native') return 'native'
+  return `${asset.code}:${asset.issuer}`
+}
+
+function poolRecords(payload: { _embedded?: { records?: LiquidityPoolRecord[] }, records?: LiquidityPoolRecord[] }): LiquidityPoolRecord[] {
+  return payload._embedded?.records ?? payload.records ?? []
+}
+
+export async function fetchLiquidityPools(
+  network: NetworkName = 'testnet',
+  limit = 50,
+  reserves?: Array<PathAsset | string>
+): Promise<LiquidityPoolRecord[]> {
+  const params = new URLSearchParams({ limit: String(limit) })
+  if (reserves?.length) {
+    params.set('reserves', reserves.map(poolAssetString).join(','))
+  }
+
+  const data = await horizonJson<{ _embedded?: { records?: LiquidityPoolRecord[] } }>(
+    network,
+    `/liquidity_pools?${params.toString()}`
+  )
+  return poolRecords(data)
+}
+
+export function fetchLiquidityPoolsByAssetPair(
+  assetA: PathAsset | string,
+  assetB: PathAsset | string,
+  network: NetworkName = 'testnet',
+  limit = 50
+): Promise<LiquidityPoolRecord[]> {
+  return fetchLiquidityPools(network, limit, [assetA, assetB])
+}
+
+export function fetchLiquidityPoolById(
+  poolId: string,
+  network: NetworkName = 'testnet'
+): Promise<LiquidityPoolRecord> {
+  return horizonJson<LiquidityPoolRecord>(network, `/liquidity_pools/${encodeURIComponent(poolId)}`)
+}
+
+export async function fetchLiquidityPoolOperations(
+  poolId: string,
+  network: NetworkName = 'testnet',
+  limit = 50
+): Promise<StellarSdk.Horizon.ServerApi.OperationRecord[]> {
+  const params = new URLSearchParams({ order: 'desc', limit: String(limit) })
+  const data = await horizonJson<{ _embedded?: { records?: StellarSdk.Horizon.ServerApi.OperationRecord[] } }>(
+    network,
+    `/liquidity_pools/${encodeURIComponent(poolId)}/operations?${params.toString()}`
+  )
+  return data._embedded?.records ?? []
+}
+
+export async function fetchAccountLiquidityPoolPositions(
+  publicKey: string,
+  network: NetworkName = 'testnet'
+): Promise<LiquidityPoolPosition[]> {
+  const account = await fetchAccount(publicKey, network)
+  const balances = account.balances.filter(
+    (balance) => balance.asset_type === 'liquidity_pool_shares'
+  ) as AccountLiquidityPoolBalance[]
+
+  return Promise.all(balances.map(async (balance) => {
+    let pool: LiquidityPoolRecord | null = null
+    try {
+      pool = await fetchLiquidityPoolById(balance.liquidity_pool_id, network)
+    } catch {
+      pool = null
+    }
+
+    const shares = parseFloat(balance.balance)
+    const totalShares = parseFloat(pool?.total_shares ?? '0')
+
+    return {
+      poolId: balance.liquidity_pool_id,
+      balance: balance.balance,
+      limit: balance.limit,
+      sharePercent: totalShares > 0 ? (shares / totalShares) * 100 : 0,
+      pool,
+    }
+  }))
+}
+
+export async function fetchAccountLiquidityPoolHistory(
+  publicKey: string,
+  network: NetworkName = 'testnet',
+  limit = 50,
+  poolId: string | null = null
+): Promise<StellarSdk.Horizon.ServerApi.OperationRecord[]> {
+  const server = getServer(network)
+  const ops = await server.operations().forAccount(publicKey).order('desc').limit(limit).call()
+  return (ops.records || []).filter((op) => {
+    const isPoolOperation = op.type === 'liquidity_pool_deposit' || op.type === 'liquidity_pool_withdraw'
+    if (!isPoolOperation) return false
+    return !poolId || (op as { liquidity_pool_id?: string }).liquidity_pool_id === poolId
+  })
 }
 
 // ─── Asset Discovery & Analytics ─────────────────────────────────────────────
@@ -1339,8 +1904,8 @@ export async function fetchAssets(
 
   return {
     records: assets,
-    next: response.next ? response.next() : undefined,
-    prev: response.prev ? response.prev() : undefined
+    next: response.records[response.records.length - 1]?.paging_token,
+    prev: response.records[0]?.paging_token
   }
 }
 
@@ -1367,7 +1932,7 @@ export async function fetchAssetStats(
       asset: {
         code: assetData.asset_code,
         issuer: assetData.asset_issuer,
-        num_accounts: parseInt(assetData.num_accounts),
+        num_accounts: Number(assetData.num_accounts),
         amount: assetData.amount,
         flags: {
           auth_required: assetData.flags.auth_required,
@@ -1376,15 +1941,15 @@ export async function fetchAssetStats(
           auth_clawback_enabled: assetData.flags.auth_clawback_enabled
         }
       },
-      num_accounts: parseInt(assetData.num_accounts),
-      num_claimable_balances: parseInt(assetData.num_claimable_balances || '0'),
-      num_liquidity_pools: parseInt(assetData.num_liquidity_pools || '0'),
-      num_contracts: parseInt(assetData.num_contracts || '0'),
+      num_accounts: Number(assetData.num_accounts),
+      num_claimable_balances: Number(assetData.num_claimable_balances || 0),
+      num_liquidity_pools: Number(assetData.num_liquidity_pools || 0),
+      num_contracts: Number(assetData.num_contracts || 0),
       amount: assetData.amount,
       accounts: {
-        authorized: parseInt(assetData.accounts?.authorized || '0'),
-        authorized_to_maintain_liabilities: parseInt(assetData.accounts?.authorized_to_maintain_liabilities || '0'),
-        unauthorized: parseInt(assetData.accounts?.unauthorized || '0')
+        authorized: Number(assetData.accounts?.authorized || 0),
+        authorized_to_maintain_liabilities: Number(assetData.accounts?.authorized_to_maintain_liabilities || 0),
+        unauthorized: Number(assetData.accounts?.unauthorized || 0)
       },
       balances: {
         authorized: assetData.balances?.authorized || '0',
@@ -1518,7 +2083,10 @@ export async function getTrustlineRecommendations(
     const currentAssets = new Set(
       account.balances
         .filter(balance => balance.asset_type !== 'native')
-        .map(balance => `${balance.asset_code}:${balance.asset_issuer}`)
+        .map(balance => {
+          const assetBalance = balance as unknown as { asset_code: string; asset_issuer: string }
+          return `${assetBalance.asset_code}:${assetBalance.asset_issuer}`
+        })
     )
     
     // Fetch popular assets
@@ -1714,7 +2282,7 @@ export async function fetchPaymentPaths(
     url = `${horizonUrl}/paths/strict-receive?${assetParams(destAsset, 'destination')}&destination_amount=${amount}&source_assets=${encodeURIComponent(assetString(sourceAsset))}`
   }
 
-  const res = await fetch(url)
+  const res = await fetch(url, withNetworkHeaders({}, network))
   if (!res.ok) throw new Error(`Horizon error: ${res.status}`)
   const data = await res.json() as { _embedded?: { records: PaymentPathRecord[] } }
   return data._embedded?.records ?? []
@@ -1746,6 +2314,8 @@ export default {
   NETWORKS,
   getNetworkDetails,
   updateCustomNetworkConfig,
+  switchToCustomProfile,
+  loadCustomNetworkProfiles,
   getServer,
   getSorobanServer,
   fetchAccount,
@@ -1763,6 +2333,12 @@ export default {
   simulateContractCall,
   invokeContract,
   isValidPublicKey,
+  isValidEd25519PublicKey,
+  isValidMuxedAccount,
+  isFederatedAddress,
+  parseMuxedAccount,
+  resolveFederatedAddress,
+  resolveAddress,
   isValidContractId,
   formatXLM,
   shortAddress,
@@ -1771,6 +2347,12 @@ export default {
   runAdvancedTransactionSimulation,
   exportTransactionXDR,
   fetchPaymentPaths,
+  fetchLiquidityPools,
+  fetchLiquidityPoolsByAssetPair,
+  fetchLiquidityPoolById,
+  fetchLiquidityPoolOperations,
+  fetchAccountLiquidityPoolPositions,
+  fetchAccountLiquidityPoolHistory,
   fetchAssets,
   fetchAssetStats,
   fetchIssuerInfo,

@@ -1,6 +1,6 @@
 import React from 'react'
 import { useStore } from '../../lib/store'
-import { fetchAccount, fetchAccountOffers, isValidPublicKey, shortAddress, formatXLM } from '../../lib/stellar'
+import { fetchAccount, fetchAccountOffers, isValidPublicKey, resolveAddress, shortAddress, formatXLM } from '../../lib/stellar'
 import { Copy, Search, Trash2, Plus, Download, ArrowUpDown } from 'lucide-react'
 import ComparisonChart from './ComparisonChart'
 
@@ -20,15 +20,15 @@ export default function AccountComparison() {
     const handleFetch = async () => {
         const promises = comparisonSlots.map(async (slot, index) => {
             // Trim whitespace
-            const key = slot.key?.trim()
-            if (!key) {
+            const input = slot.key?.trim()
+            if (!input) {
                 setComparisonData(index, null)
                 setComparisonError(index, null)
                 return
             }
 
-            if (!isValidPublicKey(key)) {
-                setComparisonError(index, 'Invalid public key')
+            if (!isValidPublicKey(input)) {
+                setComparisonError(index, 'Invalid address format')
                 setComparisonData(index, null)
                 return
             }
@@ -37,11 +37,30 @@ export default function AccountComparison() {
             setComparisonError(index, null)
 
             try {
+                // Resolve the address (handles G, M, and federated formats)
+                const resolved = await resolveAddress(input, network)
+                
+                if (!resolved) {
+                    setComparisonError(index, 'Failed to resolve address')
+                    setComparisonData(index, null)
+                    setComparisonLoading(index, false)
+                    return
+                }
+
+                // Use the master account for fetching data
                 const [data, offers] = await Promise.all([
-                    fetchAccount(key, network),
-                    fetchAccountOffers(key, network).catch(() => []) // Fallback to empty if error
+                    fetchAccount(resolved.accountId, network),
+                    fetchAccountOffers(resolved.accountId, network).catch(() => []) // Fallback to empty if error
                 ])
-                setComparisonData(index, { ...data, offers })
+                
+                // Store the resolved info with the account data
+                setComparisonData(index, { 
+                    ...data, 
+                    offers,
+                    _muxedId: resolved.muxedId,
+                    _federatedAddress: resolved.federatedAddress,
+                    _originalInput: input,
+                })
             } catch (err) {
                 setComparisonError(index, err.message || 'Account not found')
                 setComparisonData(index, null)

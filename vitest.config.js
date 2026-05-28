@@ -6,8 +6,8 @@ export default defineConfig({
   plugins: [react()],
   define: { global: 'globalThis' },
   resolve: {
-    // .js before .ts so store.js / multisig.js win over their .ts counterparts
-    extensions: ['.js', '.jsx', '.ts', '.tsx', '.json'],
+    // .ts before .js to match Vite's resolve order
+    extensions: ['.ts', '.tsx', '.js', '.jsx', '.json'],
     alias: {
       buffer: 'buffer',
     },

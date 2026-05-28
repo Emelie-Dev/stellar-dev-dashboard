@@ -1,7 +1,8 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import * as StellarSdk from "@stellar/stellar-sdk";
 import { useStore } from "../../lib/store";
 import { fetchOrderBook, fetchTrades, parseAssetString } from "../../lib/dex";
+import LiquidityPools from "./LiquidityPools";
 
 function toAsset(assetInput) {
   if (!assetInput || assetInput === "native" || assetInput === "XLM") {
@@ -14,6 +15,7 @@ function toAsset(assetInput) {
 
 export default function DEXExplorer() {
   const { network } = useStore();
+  const [activeView, setActiveView] = useState("orderbook");
   const [selling, setSelling] = useState("native");
   const [buying, setBuying] = useState(
     "USDC:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN"
@@ -22,6 +24,12 @@ export default function DEXExplorer() {
   const [trades, setTrades] = useState([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (sessionStorage.getItem("dex:poolPair")) {
+      setActiveView("pools");
+    }
+  }, []);
 
   const spread = useMemo(() => {
     const bestBid = Number(book?.bids?.[0]?.price || 0);
@@ -58,10 +66,29 @@ export default function DEXExplorer() {
 
   return (
     <div className="animate-in" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-      <div style={{ fontFamily: "var(--font-display)", fontSize: "22px", fontWeight: 700 }}>
-        DEX Explorer
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px" }}>
+        <div>
+          <div style={{ fontFamily: "var(--font-display)", fontSize: "22px", fontWeight: 700 }}>
+            DEX Explorer
+          </div>
+          <div style={{ color: "var(--text-muted)", fontSize: "12px", marginTop: "4px", fontFamily: "var(--font-mono)" }}>
+            Order books, trades, and AMM liquidity pools
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: "6px" }}>
+          <ViewButton active={activeView === "orderbook"} onClick={() => setActiveView("orderbook")}>
+            Order Books
+          </ViewButton>
+          <ViewButton active={activeView === "pools"} onClick={() => setActiveView("pools")}>
+            Liquidity Pools
+          </ViewButton>
+        </div>
       </div>
 
+      {activeView === "pools" ? (
+        <LiquidityPools />
+      ) : (
+        <>
       <div
         style={{
           display: "grid",
@@ -173,7 +200,29 @@ export default function DEXExplorer() {
           </div>
         ))}
       </div>
+        </>
+      )}
     </div>
+  );
+}
+
+function ViewButton({ active, onClick, children }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        border: `1px solid ${active ? "var(--cyan-dim)" : "var(--border)"}`,
+        background: active ? "var(--cyan-glow)" : "transparent",
+        color: active ? "var(--cyan)" : "var(--text-secondary)",
+        borderRadius: "var(--radius-sm)",
+        fontFamily: "var(--font-mono)",
+        fontSize: "12px",
+        padding: "7px 10px",
+        cursor: "pointer",
+      }}
+    >
+      {children}
+    </button>
   );
 }
 
