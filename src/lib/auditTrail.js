@@ -186,7 +186,7 @@ class AuditTrail {
     const metadata = {
       error: error.message,
       stack: error.stack,
-      context
+      context: this.sanitizeData(context)
     };
     
     this.logEvent('ERROR', error.message, metadata, 'error');
@@ -224,7 +224,8 @@ class AuditTrail {
     const sanitized = JSON.parse(JSON.stringify(data));
     const sensitivePaths = [
       'secretKey', 'privateKey', 'seed', 'password', 'token',
-      'signerKey', 'signingKey'
+      'signerKey', 'signingKey', 'secret', 'authorization',
+      'apiKey', 'api-key', 'x-api-key', 'headers'
     ];
     
     const redactSensitive = (obj) => {

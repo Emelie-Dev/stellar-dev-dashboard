@@ -1,7 +1,8 @@
-import React, { useMemo, useState } from 'react'
 import {
   runAdvancedTransactionSimulation,
 } from '../../lib/stellar'
+import { useStore } from '../../lib/store'
+import { getErrorMessage } from '../../lib/errorHandling/ErrorMessages'
 
 function Panel({ title, subtitle, children }) {
   return (
@@ -20,17 +21,26 @@ function Panel({ title, subtitle, children }) {
   )
 }
 
-export default function AdvancedTransactionSimulation({ transactionParams }) {
+export default function AdvancedTransactionSimulation({ transactionParams: propParams }) {
+  const { connectedAddress, network } = useStore()
   const [isLoading, setIsLoading] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
   const [congestion, setCongestion] = useState('0.55')
 
+  const transactionParams = useMemo(() => propParams || {
+    sourceAccount: connectedAddress || '',
+    operations: [],
+    baseFee: 100,
+    timeBounds: {},
+    network
+  }, [propParams, connectedAddress, network])
+
   const scenarios = useMemo(() => ([
-    { label: 'Low Congestion', networkCongestion: 0.2, operationMultiplier: 1, baseFee: transactionParams.baseFee },
-    { label: 'Peak Congestion', networkCongestion: 1.1, operationMultiplier: 1.1, baseFee: transactionParams.baseFee },
-    { label: 'Complex Payload', networkCongestion: 0.7, operationMultiplier: 1.4, baseFee: transactionParams.baseFee + 50 },
-  ]), [transactionParams.baseFee])
+    { label: 'Low Congestion', networkCongestion: 0.2, operationMultiplier: 1, baseFee: (transactionParams?.baseFee || 100) },
+    { label: 'Peak Congestion', networkCongestion: 1.1, operationMultiplier: 1.1, baseFee: (transactionParams?.baseFee || 100) },
+    { label: 'Complex Payload', networkCongestion: 0.7, operationMultiplier: 1.4, baseFee: (transactionParams?.baseFee || 100) + 50 },
+  ]), [transactionParams?.baseFee])
 
   async function handleRunSimulation() {
     setIsLoading(true)

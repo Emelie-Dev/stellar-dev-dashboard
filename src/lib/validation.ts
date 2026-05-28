@@ -97,6 +97,101 @@ export function validateNetwork(value: unknown): ValidationResult {
   return ok()
 }
 
+// ─── URL validation ───────────────────────────────────────────────────────────
+
+/**
+ * Validate a URL (HTTP/HTTPS only).
+ * @param value The URL to validate
+ * @param required Whether the URL is required (default true)
+ */
+export function validateUrl(value: unknown, required = true): ValidationResult {
+  if (!value) {
+    if (required) {
+      return fail('URL is required.')
+    }
+    return ok()
+  }
+  
+  if (typeof value !== 'string') {
+    return fail('URL must be a string.')
+  }
+  
+  const trimmed = value.trim()
+  if (trimmed === '') {
+    if (required) {
+      return fail('URL is required.')
+    }
+    return ok()
+  }
+  
+  try {
+    const url = new URL(trimmed)
+    if (!['http:', 'https:'].includes(url.protocol)) {
+      return fail('URL must use HTTP or HTTPS protocol.')
+    }
+    return ok()
+  } catch {
+    return fail('Invalid URL format.')
+  }
+}
+
+/**
+ * Validate a Horizon API URL.
+ */
+export function validateHorizonUrl(value: unknown): ValidationResult {
+  const result = validateUrl(value, true)
+  if (!result.valid) return result
+  
+  const trimmed = String(value).trim()
+  if (!trimmed.includes('horizon')) {
+    // Warn but don't fail—could be a custom endpoint
+    // return fail('Horizon URL should contain "horizon" in the path.')
+  }
+  return ok()
+}
+
+/**
+ * Validate a Soroban RPC URL.
+ */
+export function validateSorobanUrl(value: unknown, required = true): ValidationResult {
+  const result = validateUrl(value, required)
+  if (!result.valid) return result
+  
+  if (!value) return ok() // Optional if not required
+  
+  const trimmed = String(value).trim()
+  if (!trimmed.includes('soroban') && !trimmed.includes('rpc')) {
+    // Warn but don't fail—could be a custom endpoint
+  }
+  return ok()
+}
+
+/**
+ * Validate a network passphrase.
+ */
+export function validateNetworkPassphrase(value: unknown, required = true): ValidationResult {
+  if (!value) {
+    if (required) {
+      return fail('Network passphrase is required.')
+    }
+    return ok()
+  }
+  
+  if (typeof value !== 'string') {
+    return fail('Network passphrase must be a string.')
+  }
+  
+  const trimmed = value.trim()
+  if (trimmed === '') {
+    if (required) {
+      return fail('Network passphrase is required.')
+    }
+    return ok()
+  }
+  
+  return ok()
+}
+
 // ─── Compose multiple validations ─────────────────────────────────────────────
 
 /**

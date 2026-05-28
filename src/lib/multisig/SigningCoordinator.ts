@@ -1,1 +1,11 @@
-export class SigningCoordinator { constructor(){ this.signers=[];} addSigner(s){ this.signers.push(s);} }
+export class SigningCoordinator {
+  signers: unknown[];
+
+  constructor() {
+    this.signers = [];
+  }
+
+  addSigner(s: unknown) {
+    this.signers.push(s);
+  }
+}

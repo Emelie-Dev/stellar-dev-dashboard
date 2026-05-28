@@ -1,5 +1,7 @@
 import React, { useState } from "react";
-import { simulateTransaction } from "../../lib/transactionBuilder";
+import { simulateTransaction, formatXLM } from "../../lib/stellar";
+import { useStore } from "../../lib/store";
+import { getErrorMessage } from "../../lib/errorHandling/ErrorMessages";
 
 function Panel({ title, subtitle, children }) {
   return (
@@ -80,20 +82,36 @@ function ResultBlock({ label, data }) {
 }
 
 export default function TransactionSimulator({
-  transactionParams,
+  transactionParams: propParams,
   onSimulate,
 }) {
+  const { connectedAddress, network } = useStore();
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
 
+  const transactionParams = propParams || {
+    sourceAccount: connectedAddress || "",
+    operations: [],
+    baseFee: 100,
+    timeBounds: {},
+    network
+  };
+
   async function handleSimulate() {
+    if (!transactionParams.sourceAccount) {
+      const err = getErrorMessage('validation');
+      setResult({ success: false, errors: [err.message] });
+      return;
+    }
+
     setLoading(true);
     try {
       const simResult = await simulateTransaction(transactionParams);
       setResult(simResult);
       if (onSimulate) onSimulate(simResult);
     } catch (error) {
-      setResult({ success: false, errors: [error.message] });
+      const err = getErrorMessage('stellar');
+      setResult({ success: false, errors: [error.message || err.message] });
     } finally {
       setLoading(false);
     }
@@ -244,25 +262,55 @@ export default function TransactionSimulator({
                       marginBottom: "4px",
                     }}
                   >
-                    Transaction Hash
-                  </div>
-                  <div
-                    style={{
-                      fontSize: "11px",
-                      fontFamily: "var(--font-mono)",
-                      color: "var(--text-primary)",
-                    }}
-                  >
-                    {result.hash?.slice(0, 16)}...
+                      {result.hash?.slice(0, 16)}...
                   </div>
                 </div>
               </div>
+
+              {result.sorobanMetrics && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
+                    Soroban Resources
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '10px' }}>
+                    <div style={{ padding: '12px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }}>
+                      <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '4px' }}>Resource Fee</div>
+                      <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--green)' }}>{result.sorobanMetrics.resourceFee} stroops</div>
+                    </div>
+                    <div style={{ padding: '12px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }}>
+                      <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '4px' }}>Footprint (RO/RW)</div>
+                      <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                        {result.sorobanMetrics.footprint.readOnly.length} / {result.sorobanMetrics.footprint.readWrite.length}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {result.xdr && (
                 <ResultBlock label="Transaction XDR" data={result.xdr} />
               )}
             </>
           )}
+
+          <button
+            onClick={handleSimulate}
+            disabled={loading}
+            style={{
+              marginTop: '8px',
+              padding: '12px',
+              background: 'var(--cyan-glow)',
+              border: '1px solid var(--cyan)',
+              borderRadius: 'var(--radius-md)',
+              color: 'var(--cyan)',
+              fontWeight: 700,
+              cursor: 'pointer',
+              transition: 'var(--transition)',
+              opacity: loading ? 0.6 : 1
+            }}
+          >
+            {loading ? 'Simulating...' : 'Simulate Transaction'}
+          </button>
         </div>
       )}
     </Panel>
