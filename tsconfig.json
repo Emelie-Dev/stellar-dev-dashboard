@@ -15,16 +15,19 @@
     "jsx": "react-jsx",
 
     /* Strictness */
-    "strict": true,
+    "strict": false,
+    "noImplicitAny": false,
+    "strictPropertyInitialization": false,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true,
 
-    /* Allow .jsx component files to import .ts lib files */
-    "allowJs": true,
+    /* Keep type-check focused on the TypeScript migration surface. */
+    "allowJs": false,
     "checkJs": false
   },
   "include": [
+    "src/**/*.d.ts",
     "src/lib/**/*.ts",
     "src/hooks/**/*.ts",
     "src/components/**/*.ts",

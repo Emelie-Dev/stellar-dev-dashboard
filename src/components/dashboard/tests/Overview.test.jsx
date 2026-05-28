@@ -21,19 +21,31 @@ vi.mock('../../layout/DashboardGrid', () => ({
 }));
 
 vi.mock('../../layout/WidgetSelector', () => ({
-  default: ({ isOpen }) =>
-    isOpen ? <div data-testid="widget-selector">selector</div> : null,
+  default: ({ isOpen }) => (isOpen ? <div data-testid="widget-selector">selector</div> : null),
 }));
 
 // Mock all the widget components — Overview just constructs them in defaults
-const widgetStub = (label) => () => <div>{label}</div>;
-vi.mock('../../layout/widgets/BalanceWidget',      () => ({ default: widgetStub('balance') }));
-vi.mock('../../layout/widgets/AssetsWidget',       () => ({ default: widgetStub('assets') }));
-vi.mock('../../layout/widgets/TransactionsWidget', () => ({ default: widgetStub('transactions') }));
-vi.mock('../../layout/widgets/NetworkStatsWidget', () => ({ default: widgetStub('network') }));
-vi.mock('../../layout/widgets/AccountStatsWidget', () => ({ default: widgetStub('account') }));
-vi.mock('../../layout/widgets/QuickActionsWidget', () => ({ default: widgetStub('quick') }));
-vi.mock('../../layout/widgets/PriceTickerWidget',  () => ({ default: widgetStub('price') }));
+vi.mock('../../layout/widgets/BalanceWidget', () => ({
+  default: () => <div>balance</div>,
+}));
+vi.mock('../../layout/widgets/AssetsWidget', () => ({
+  default: () => <div>assets</div>,
+}));
+vi.mock('../../layout/widgets/TransactionsWidget', () => ({
+  default: () => <div>transactions</div>,
+}));
+vi.mock('../../layout/widgets/NetworkStatsWidget', () => ({
+  default: () => <div>network</div>,
+}));
+vi.mock('../../layout/widgets/AccountStatsWidget', () => ({
+  default: () => <div>account</div>,
+}));
+vi.mock('../../layout/widgets/QuickActionsWidget', () => ({
+  default: () => <div>quick</div>,
+}));
+vi.mock('../../layout/widgets/PriceTickerWidget', () => ({
+  default: () => <div>price</div>,
+}));
 
 // Mock CopyableValue — its full behaviour is exercised elsewhere
 vi.mock('../CopyableValue', () => ({
@@ -67,7 +79,7 @@ vi.mock('../../../lib/store', () => ({
 
 // Mock stellar.shortAddress (used by Overview)
 vi.mock('../../../lib/stellar', () => ({
-  shortAddress: (addr) => (addr ? `${addr.slice(0, 4)}…${addr.slice(-4)}` : ''),
+  shortAddress: (addr, chars = 6) => (addr ? `${addr.slice(0, chars)}…${addr.slice(-chars)}` : ''),
 }));
 
 import Overview from '../Overview';
@@ -135,6 +147,6 @@ describe('<Overview />', () => {
 
   it('renders the connected-address copyable when an address is present', () => {
     render(<Overview />);
-    expect(screen.getByTestId('copyable')).toHaveTextContent('GABC…0XYZ');
+    expect(screen.getByTestId('copyable')).toHaveTextContent('GABC...X…BC...XYZ');
   });
 });

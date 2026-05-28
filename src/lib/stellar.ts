@@ -664,7 +664,9 @@ function serializeDiagnosticEvent(
   return {
     inSuccessfulContractCall: event.inSuccessfulContractCall(),
     type: contractEvent.type().name || contractEvent.type().toString(),
-    contractId: contractId ? StellarSdk.Address.fromScAddress(contractId).toString() : null,
+    contractId: contractId
+      ? StellarSdk.Address.fromScAddress(contractId as unknown as StellarSdk.xdr.ScAddress).toString()
+      : null,
     topics: body.topics().map(serializeScVal),
     value: serializeScVal(body.data()),
   }
@@ -1646,8 +1648,8 @@ export async function fetchAssets(
 
   return {
     records: assets,
-    next: response.next ? response.next() : undefined,
-    prev: response.prev ? response.prev() : undefined
+    next: response.records[response.records.length - 1]?.paging_token,
+    prev: response.records[0]?.paging_token
   }
 }
 
@@ -1674,7 +1676,7 @@ export async function fetchAssetStats(
       asset: {
         code: assetData.asset_code,
         issuer: assetData.asset_issuer,
-        num_accounts: parseInt(assetData.num_accounts),
+        num_accounts: Number(assetData.num_accounts),
         amount: assetData.amount,
         flags: {
           auth_required: assetData.flags.auth_required,
@@ -1683,15 +1685,15 @@ export async function fetchAssetStats(
           auth_clawback_enabled: assetData.flags.auth_clawback_enabled
         }
       },
-      num_accounts: parseInt(assetData.num_accounts),
-      num_claimable_balances: parseInt(assetData.num_claimable_balances || '0'),
-      num_liquidity_pools: parseInt(assetData.num_liquidity_pools || '0'),
-      num_contracts: parseInt(assetData.num_contracts || '0'),
+      num_accounts: Number(assetData.num_accounts),
+      num_claimable_balances: Number(assetData.num_claimable_balances || 0),
+      num_liquidity_pools: Number(assetData.num_liquidity_pools || 0),
+      num_contracts: Number(assetData.num_contracts || 0),
       amount: assetData.amount,
       accounts: {
-        authorized: parseInt(assetData.accounts?.authorized || '0'),
-        authorized_to_maintain_liabilities: parseInt(assetData.accounts?.authorized_to_maintain_liabilities || '0'),
-        unauthorized: parseInt(assetData.accounts?.unauthorized || '0')
+        authorized: Number(assetData.accounts?.authorized || 0),
+        authorized_to_maintain_liabilities: Number(assetData.accounts?.authorized_to_maintain_liabilities || 0),
+        unauthorized: Number(assetData.accounts?.unauthorized || 0)
       },
       balances: {
         authorized: assetData.balances?.authorized || '0',
@@ -1825,7 +1827,10 @@ export async function getTrustlineRecommendations(
     const currentAssets = new Set(
       account.balances
         .filter(balance => balance.asset_type !== 'native')
-        .map(balance => `${balance.asset_code}:${balance.asset_issuer}`)
+        .map(balance => {
+          const assetBalance = balance as unknown as { asset_code: string; asset_issuer: string }
+          return `${assetBalance.asset_code}:${assetBalance.asset_issuer}`
+        })
     )
     
     // Fetch popular assets
