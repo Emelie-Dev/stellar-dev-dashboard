@@ -1,5 +1,15 @@
 import '@testing-library/jest-dom';
-import { vi } from 'vitest';
+import { vi, beforeAll, afterAll, afterEach } from 'vitest';
+import { server } from './mocks/server';
+
+// ─── MSW Horizon mock server (#171) ───────────────────────────────────────────
+// By default all tests run against the MSW mock layer, not live Horizon.
+// Set STELLAR_E2E_LIVE=1 in your environment to skip MSW and hit the real network.
+if (!process.env.STELLAR_E2E_LIVE) {
+  beforeAll(() => server.listen({ onUnhandledRequest: 'warn' }));
+  afterEach(() => server.resetHandlers());
+  afterAll(() => server.close());
+}
 
 // ─── localStorage mock ────────────────────────────────────────────────────────
 const localStorageStore = {};

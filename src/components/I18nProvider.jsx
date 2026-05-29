@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useCallback, useEffect, useState } from 'react';
 import { I18nextProvider } from 'react-i18next';
-import i18n, { SUPPORTED_LANGUAGES, LANGUAGE_STORAGE_KEY } from '../i18n/index.js';
+import i18n, { SUPPORTED_LANGUAGES, LANGUAGE_STORAGE_KEY, RTL_LANGUAGES } from '../i18n/index.js';
 
 const I18nContext = createContext(null);
 
@@ -49,13 +49,17 @@ export function I18nProvider({ children }) {
 
         // Update <html lang=""> for accessibility & SEO
         document.documentElement.setAttribute('lang', langCode);
+        // Update <html dir=""> for RTL language support (#184)
+        document.documentElement.setAttribute('dir', RTL_LANGUAGES.has(langCode) ? 'rtl' : 'ltr');
     }, []);
+
+    const isRTL = RTL_LANGUAGES.has(currentLanguage);
 
     const value = {
         currentLanguage,
         changeLanguage,
         supportedLanguages: SUPPORTED_LANGUAGES,
-        isRTL: false, // extend here when adding RTL languages (e.g. 'ar')
+        isRTL,
     };
 
     return (
