@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useMemo } from 'react'
 import { format } from 'date-fns'
 import { useStore } from '../../lib/store'
-import { shortAddress, formatXLM, fetchAccountCreationDate, fetchAccountOffers } from '../../lib/stellar'
+import { shortAddress, formatXLM, fetchAccountCreationDate, fetchAccountOffers, calculateAccountReserves } from '../../lib/stellar'
 import CopyableValue from './CopyableValue'
 import useAssetUsdEstimates, { formatEstimatedUsd } from '../../hooks/useAssetUsdEstimates'
 
@@ -48,12 +48,18 @@ function InfoRow({ label, value, mono = true, accent, copyValue, secondaryValue 
 }
 
 export default function Account() {
-  const { accountData, connectedAddress, network } = useStore()
+  const { accountData, connectedAddress, network, networkStats } = useStore()
   const [offers, setOffers] = useState([])
   const [offersLoading, setOffersLoading] = useState(false)
   const [offersError, setOffersError] = useState(null)
   const [createdAt, setCreatedAt] = useState(null)
   const [createdAtLoading, setCreatedAtLoading] = useState(false)
+
+  // Calculate reserves when accountData, networkStats, or offers change
+  const reserves = useMemo(() => {
+    if (!accountData) return null
+    return calculateAccountReserves(accountData, networkStats, offers.length)
+  }, [accountData, networkStats, offers.length])
 
   useEffect(() => {
     if (!connectedAddress) {
@@ -153,6 +159,63 @@ export default function Account() {
           </a>
         </div>
       </div>
+
+      {reserves && (
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
+          <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)', fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: '13px' }}>
+            Reserve Breakdown
+          </div>
+          <InfoRow label="Base Reserve" value={formatXLM(reserves.baseReserve) + ' XLM'} />
+          <InfoRow label="Signer Reserve" value={formatXLM(reserves.signerReserve) + ' XLM'} />
+          <InfoRow label="Asset Reserve" value={formatXLM(reserves.assetReserve) + ' XLM'} />
+          <InfoRow label="Offer Reserve" value={formatXLM(reserves.offerReserve) + ' XLM'} />
+          <InfoRow label="Subentry Reserve" value={formatXLM(reserves.subentryReserve) + ' XLM'} />
+          <div style={{ 
+            padding: '12px 18px', 
+            borderBottom: '1px solid var(--border)',
+            background: 'var(--bg-elevated)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
+                Total Locked
+              </span>
+              <span style={{ fontSize: '12px', color: 'var(--amber)', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+                {formatXLM(reserves.totalReserves)} XLM
+              </span>
+            </div>
+          </div>
+          <div style={{ 
+            padding: '12px 18px', 
+            borderBottom: '1px solid var(--border)',
+            background: 'var(--cyan-glow-sm)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
+                Available Spendable
+              </span>
+              <span style={{ fontSize: '12px', color: 'var(--cyan)', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+                {formatXLM(reserves.availableBalance)} XLM
+              </span>
+            </div>
+          </div>
+          <div style={{ padding: '10px 18px' }}>
+            <a
+              href="https://developers.stellar.org/docs/glossary/fees/#minimum-balance"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                fontSize: '12px',
+                color: 'var(--cyan)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}
+            >
+              Learn about Stellar reserves ↗
+            </a>
+          </div>
+        </div>
+      )}
 
       <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
         <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)', fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: '13px' }}>
