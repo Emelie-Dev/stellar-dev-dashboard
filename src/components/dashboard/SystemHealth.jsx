@@ -1,4 +1,5 @@
 import React from "react";
+import { useStore } from '../../lib/store'
 import { useMonitoring } from "../../hooks/useMonitoring";
 import { StatCard } from "./Card";
 
@@ -46,6 +47,7 @@ function AlertRow({ alert, onClear }) {
 }
 
 export default function SystemHealth() {
+  const { setActiveTab } = useStore()
   const { snapshot, score, alerts, errors, clearAlert, resetAlerts } = useMonitoring();
   const memory = snapshot?.memory;
 
@@ -112,6 +114,23 @@ export default function SystemHealth() {
         {alerts.map((alert) => (
           <AlertRow key={alert.id} alert={alert} onClear={clearAlert} />
         ))}
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <button
+          onClick={() => setActiveTab('performance')}
+          style={{
+            border: '1px solid var(--border)',
+            background: 'var(--bg-elevated)',
+            color: 'var(--cyan)',
+            borderRadius: 'var(--radius-sm)',
+            fontSize: '12px',
+            padding: '8px 14px',
+            cursor: 'pointer',
+          }}
+        >
+          View Performance Monitor →
+        </button>
       </div>
     </div>
   );

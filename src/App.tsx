@@ -32,6 +32,7 @@ import ExplorerEmbed from './components/dashboard/ExplorerEmbed'
 import RealTimeLedger from './components/dashboard/RealTimeLedger'
 import Analytics from './components/dashboard/Analytics'
 import SystemHealth from './components/dashboard/SystemHealth'
+import PerformanceMonitor from './components/dashboard/PerformanceMonitor'
 import Settings from './components/dashboard/Settings'
 import { AssetDiscovery } from './components/assets'
 import { MultisigManager } from './components/multisig'
@@ -114,6 +115,7 @@ const TABS: Record<string, TabComponent> = {
   multisig: MultisigManager,
   analytics: Analytics,
   systemHealth: SystemHealth,
+  performance: PerformanceMonitor,
   settings: Settings,
   audit: AuditLog,
   anchors: AnchorIntegration,

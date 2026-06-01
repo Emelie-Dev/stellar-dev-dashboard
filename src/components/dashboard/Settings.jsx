@@ -33,7 +33,7 @@ function ErrorMessage({ message }) {
 export default function Settings() {
   const initialCustomHeaders = getCustomNetworkAuthHeaders();
   const initialHeaderName = Object.keys(initialCustomHeaders)[0] || "Authorization";
-  const { network, setNetwork, theme, toggleTheme } = useStore();
+  const { network, setNetwork, theme, toggleTheme, setActiveTab } = useStore();
   const {
     profiles,
     activeProfile,
@@ -552,6 +552,30 @@ export default function Settings() {
         {apiKey && (
           <div style={{ fontSize: "11px", color: "var(--green)" }}>✓ API key active</div>
         )}
+      </div>
+
+      <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+          Performance
+        </div>
+        <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+          View Core Web Vitals, bundle analysis, and performance budget violations.
+        </div>
+        <button
+          onClick={() => setActiveTab('performance')}
+          style={{
+            padding: '8px 14px',
+            borderRadius: 'var(--radius-sm)',
+            border: '1px solid var(--cyan-dim)',
+            background: 'var(--cyan-glow)',
+            color: 'var(--cyan)',
+            fontSize: '12px',
+            cursor: 'pointer',
+            alignSelf: 'flex-start',
+          }}
+        >
+          Open Performance Monitor
+        </button>
       </div>
     </div>
   );
