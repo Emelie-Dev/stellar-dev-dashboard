@@ -432,6 +432,54 @@ export default function Builder() {
               )}
             </div>
             
+            {simulation.warnings && simulation.warnings.length > 0 && (
+              <div style={{ marginTop: '16px' }}>
+                <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--amber)', marginBottom: '8px' }}>
+                  Warnings:
+                </div>
+                {simulation.warnings.map((warning, index) => (
+                  <div key={index} style={{
+                    padding: '8px 12px',
+                    background: 'var(--amber-glow)',
+                    border: '1px solid var(--amber)',
+                    borderRadius: 'var(--radius-sm)',
+                    color: 'var(--amber)',
+                    fontSize: '11px',
+                    fontFamily: 'var(--font-mono)',
+                    marginBottom: '4px'
+                  }}>
+                    {warning}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {simulation.feeOptions && simulation.feeOptions.length > 0 && (
+              <div style={{ marginTop: '16px' }}>
+                <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                  Fee priority guidance:
+                </div>
+                <div style={{ display: 'grid', gap: '8px' }}>
+                  {simulation.feeOptions.map((option) => (
+                    <div key={option.label} style={{
+                      padding: '10px 12px',
+                      background: 'var(--bg-elevated)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 'var(--radius-sm)',
+                      color: 'var(--text-secondary)',
+                      fontSize: '12px',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      gap: '12px'
+                    }}>
+                      <span>{option.label}</span>
+                      <span>{option.fee} stroops</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {simulation.errors && simulation.errors.length > 0 && (
               <div style={{ marginTop: '16px' }}>
                 <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--red)', marginBottom: '8px' }}>
