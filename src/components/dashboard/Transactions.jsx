@@ -98,6 +98,10 @@ export default function Transactions() {
     }, {})
   }, [preferences.savedAddresses])
 
+  // Track in-flight requests to prevent duplicate calls
+  const txLoadingRef = useRef(false)
+  const opsLoadingRef = useRef(false)
+
   const filteredTransactions = useMemo(() => {
     let list = transactions
     const q = normalizeSearch(query)
@@ -143,33 +147,52 @@ export default function Transactions() {
 
   const visibleRows = view === 'transactions' ? filteredTransactions : filteredOperations
 
-  async function handleLoadMoreTransactions() {
-    if (!connectedAddress || !txHasMore || !txNextCursor || txPagingLoading) return
-
+  // Debounced load-more — guards against rapid duplicate calls from
+  // both IntersectionObserver and scroll handlers firing together
+  const handleLoadMoreTransactions = useCallback(async () => {
+    if (!connectedAddress || !txHasMore || !txNextCursor || txPagingLoading || txLoadingRef.current) return
+    txLoadingRef.current = true
     setTxPagingLoading(true)
     try {
-      const { records, nextCursor, hasMore } = await fetchTransactions(connectedAddress, network, 20, txNextCursor)
+      const { records, nextCursor, hasMore } = await fetchTransactions(
+        connectedAddress, network, PAGE_SIZE, txNextCursor
+      )
       appendTransactions(records)
       setTxNextCursor(nextCursor)
       setTxHasMore(hasMore)
     } finally {
       setTxPagingLoading(false)
+      txLoadingRef.current = false
     }
-  }
+  }, [connectedAddress, txHasMore, txNextCursor, txPagingLoading, network, appendTransactions, setTxNextCursor, setTxHasMore, setTxPagingLoading])
 
-  async function handleLoadMoreOperations() {
-    if (!connectedAddress || !opsHasMore || !opsNextCursor || opsPagingLoading) return
-
+  const handleLoadMoreOperations = useCallback(async () => {
+    if (!connectedAddress || !opsHasMore || !opsNextCursor || opsPagingLoading || opsLoadingRef.current) return
+    opsLoadingRef.current = true
     setOpsPagingLoading(true)
     try {
-      const { records, nextCursor, hasMore } = await fetchOperations(connectedAddress, network, 20, opsNextCursor)
+      const { records, nextCursor, hasMore } = await fetchOperations(
+        connectedAddress, network, PAGE_SIZE, opsNextCursor
+      )
       appendOperations(records)
       setOpsNextCursor(nextCursor)
       setOpsHasMore(hasMore)
     } finally {
       setOpsPagingLoading(false)
+      opsLoadingRef.current = false
     }
-  }
+  }, [connectedAddress, opsHasMore, opsNextCursor, opsPagingLoading, network, appendOperations, setOpsNextCursor, setOpsHasMore, setOpsPagingLoading])
+
+  const hasActiveFilters = Object.entries(filters).some(([key, value]) => {
+    if (key === 'status') return value !== 'all'
+    if (key === 'type') return value !== 'all'
+    if (key === 'memoOnly') return value === true
+    if (key === 'minFee' || key === 'maxFee') return value !== ''
+    return false
+  })
+
+  const useVirtualTx = filteredTransactions.length >= VIRTUAL_SCROLL_THRESHOLD
+  const useVirtualOp = filteredOperations.length >= VIRTUAL_SCROLL_THRESHOLD
 
   function handleExportCsv() {
     if (view === 'transactions') {
@@ -217,6 +240,7 @@ export default function Transactions() {
 
   return (
     <div className="animate-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      {/* Toolbar */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: '300px' }}>
           <div style={{
@@ -340,16 +364,28 @@ export default function Transactions() {
 
       {view === 'transactions' && (
         <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
+          {/* Column headers */}
           <div style={{ padding: '12px 18px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>
             <span>Hash</span>
             <span>Ops / Time</span>
           </div>
+
+          {/* Initial loading skeleton */}
           {txLoading ? (
-            <div style={{ padding: '32px', display: 'flex', justifyContent: 'center' }}><div className="spinner" /></div>
+            <LoadingRows count={8} height={TX_ROW_HEIGHT} />
           ) : filteredTransactions.length === 0 ? (
             <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>
               {transactions.length === 0 ? 'No transactions found' : 'No transactions match your filters'}
             </div>
+          ) : useVirtualTx ? (
+            // Virtual scroll for large lists (≥200 items)
+            <VirtualTxList
+              items={filteredTransactions}
+              network={network}
+              onLoadMore={handleLoadMoreTransactions}
+              hasMore={txHasMore}
+              loading={txPagingLoading}
+            />
           ) : (
             <>
               {filteredTransactions.map((tx, index) => (
@@ -442,18 +478,27 @@ export default function Transactions() {
         </div>
       )}
 
+      {/* Operations panel */}
       {view === 'operations' && (
         <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
           <div style={{ padding: '12px 18px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>
             <span>Type / Details</span>
             <span>Time</span>
           </div>
+
           {opsLoading ? (
-            <div style={{ padding: '32px', display: 'flex', justifyContent: 'center' }}><div className="spinner" /></div>
+            <LoadingRows count={8} height={OP_ROW_HEIGHT} />
           ) : filteredOperations.length === 0 ? (
             <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>
               {operations.length === 0 ? 'No operations found' : 'No operations match your filters'}
             </div>
+          ) : useVirtualOp ? (
+            <VirtualOpList
+              items={filteredOperations}
+              onLoadMore={handleLoadMoreOperations}
+              hasMore={opsHasMore}
+              loading={opsPagingLoading}
+            />
           ) : (
             <>
               {filteredOperations.map((op, index) => (
@@ -540,6 +585,16 @@ export default function Transactions() {
           )}
         </div>
       )}
+
+      {/* Keyframe animation for spinner — injected once */}
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .skeleton-pulse { animation: skeleton-pulse 1.5s ease-in-out infinite; }
+        @keyframes skeleton-pulse {
+          0%, 100% { opacity: 0.6; }
+          50% { opacity: 0.25; }
+        }
+      `}</style>
     </div>
   )
 }
