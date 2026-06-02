@@ -46,7 +46,7 @@ import AdvancedSearch from './components/dashboard/AdvancedSearch'
 import CacheStats from './components/dashboard/CacheStats'
 import LiveActivityFeed from './components/dashboard/LiveActivityFeed'
 import ClaimableBalances from './components/dashboard/ClaimableBalances'
-import AlertRules from './components/dashboard/AlertRules'
+import DataExport from './components/dashboard/DataExport'
 import RealTimeNotificationCenter from './components/notifications/RealTimeNotificationCenter'
 import { useRealTimeNotifications } from './hooks/useRealTimeNotifications'
 import { Webhooks } from './components/dashboard/Webhooks'
@@ -135,10 +135,7 @@ const TABS: Record<string, TabComponent> = {
   cacheStats: CacheStats,
   liveActivity: LiveActivityFeed,
   claimableBalances: ClaimableBalances,
-  webhooks: Webhooks,
-  learningHub: LearningHub,
-  hardwareWalletSecurity: HardwareWalletSecurity,
-  templateLibrary: TemplateLibrary,
+  dataExport: DataExport,
 }
 
 function NotificationBell({ onClick }: { onClick: () => void }) {

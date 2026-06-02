@@ -1,107 +1,37 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import {
-  canInstall,
-  promptInstall,
-  onUpdateReady,
-  applyUpdate,
-  isOffline,
-  onNetworkChange,
-} from '../../utils/offline.js';
+import React, { useEffect, useMemo, useState } from "react";
+import { useSettings } from "../../hooks/useSettings";
+import { useRateLimiter } from "../../hooks/useRateLimiter";
+import { useStore } from "../../lib/store";
+import { getEnvironmentConfig } from "../../lib/config";
+import { saveAlertRule, getAlertRules, deleteAlertRule } from "../../lib/alertRulesDb";
+import { ALERT_RULE_TYPE, ALERT_CHANNEL } from "../../lib/alerts";
+import PluginRegistryView from "./PluginRegistryView";
+import DataExport from "./DataExport";
 
-// ─── Inline styles (project uses inline styles throughout) ───────────────────
-const styles = {
-  section: {
-    marginBottom: '2rem',
-  },
-  sectionTitle: {
-    fontFamily: 'Syne, sans-serif',
-    fontSize: '0.75rem',
-    fontWeight: 600,
-    letterSpacing: '0.1em',
-    textTransform: 'uppercase',
-    color: 'var(--color-text-muted)',
-    marginBottom: '0.75rem',
-  },
-  card: {
-    background: 'var(--color-surface)',
-    border: '1px solid var(--color-border)',
-    borderRadius: '0.5rem',
-    padding: '1rem 1.25rem',
-    marginBottom: '0.75rem',
-  },
-  row: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: '1rem',
-  },
-  label: {
-    fontFamily: 'Syne, sans-serif',
-    fontSize: '0.875rem',
-    fontWeight: 600,
-    color: 'var(--color-text)',
-  },
-  description: {
-    fontSize: '0.75rem',
-    color: 'var(--color-text-muted)',
-    marginTop: '0.25rem',
-  },
-  button: {
-    fontFamily: 'Space Mono, monospace',
-    fontSize: '0.75rem',
-    fontWeight: 600,
-    padding: '0.5rem 1rem',
-    borderRadius: '0.375rem',
-    border: 'none',
-    cursor: 'pointer',
-    whiteSpace: 'nowrap',
-    transition: 'opacity 0.15s',
-  },
-  primaryButton: {
-    background: 'var(--color-accent)',
-    color: '#fff',
-  },
-  secondaryButton: {
-    background: 'var(--color-surface-raised)',
-    color: 'var(--color-text)',
-    border: '1px solid var(--color-border)',
-  },
-  banner: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.75rem',
-    padding: '0.75rem 1rem',
-    borderRadius: '0.5rem',
-    marginBottom: '0.75rem',
-    fontSize: '0.8125rem',
-  },
-  updateBanner: {
-    background: 'rgba(99, 179, 237, 0.12)',
-    border: '1px solid rgba(99, 179, 237, 0.35)',
-    color: 'var(--color-text)',
-  },
-  offlineBanner: {
-    background: 'rgba(252, 129, 74, 0.12)',
-    border: '1px solid rgba(252, 129, 74, 0.4)',
-    color: 'var(--color-text)',
-  },
-  dot: {
-    width: '0.5rem',
-    height: '0.5rem',
-    borderRadius: '50%',
-    flexShrink: 0,
-  },
-  badge: {
-    display: 'inline-block',
-    padding: '0.125rem 0.5rem',
-    borderRadius: '9999px',
-    fontSize: '0.6875rem',
-    fontWeight: 600,
-    fontFamily: 'Space Mono, monospace',
-  },
-};
+function FieldLabel({ children }) {
+  return (
+    <div style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "6px", textTransform: "uppercase" }}>
+      {children}
+    </div>
+  );
+}
 
-// ─── Component ────────────────────────────────────────────────────────────────
+function ErrorMessage({ message }) {
+  if (!message) return null;
+  return (
+    <div style={{ 
+      fontSize: "11px", 
+      color: "var(--error)", 
+      marginTop: "4px",
+      padding: "6px 8px",
+      background: "rgba(255, 0, 0, 0.1)",
+      borderRadius: "var(--radius-sm)",
+      border: "1px solid var(--error)"
+    }}>
+      {message}
+    </div>
+  );
+}
 
 export default function Settings() {
   const initialCustomHeaders = getCustomNetworkAuthHeaders();
@@ -380,6 +310,15 @@ export default function Settings() {
         >
           Open Performance Monitor
         </button>
+      </div>
+
+      {/* Export & Import */}
+      <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: "14px", display: "flex", flexDirection: "column", gap: "10px" }}>
+        <FieldLabel>Export &amp; Import</FieldLabel>
+        <div style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "4px" }}>
+          Download your account data and settings, or restore from a backup file.
+        </div>
+        <DataExport />
       </div>
     </div>
   );
