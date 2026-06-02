@@ -36,7 +36,9 @@ The Stellar Dev Dashboard now features a fully customizable widget-based layout 
 
 ## How to Use
 
+
 ### Basic Usage
+
 
 1. **View Mode** (Default)
    - View your widgets in read-only mode
