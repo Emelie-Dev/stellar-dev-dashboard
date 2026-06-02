@@ -24,21 +24,30 @@ const NAV_ITEMS = [
   { id: 'realtime', label: 'Real-Time', icon: '◉' },
   { id: 'liveActivity', label: 'Live Activity', icon: '⚡' },
   { id: 'cacheStats', label: 'Cache Stats', icon: '⊞' },
-
+  
+  { id: 'performance', label: 'Performance', icon: 'P' },
+  
   { type: 'header', label: 'BUILD' },
   { id: 'builder', label: 'Builder', icon: '⚒' },
   { id: 'txSimulator', label: 'Simulator', icon: '▷' },
   { id: 'advancedSim', label: 'Advanced Sim', icon: '⚡' },
   { id: 'faucet', label: 'Faucet', icon: '⬡' },
-
+  
+  { type: 'header', label: 'EXPLORE' },
+  { id: 'dex', label: 'DEX', icon: '⇌' },
+  { id: 'pathExplorer', label: 'Path Explorer', icon: '⇢' },
+  { id: 'explorers', label: 'Explorer Links', icon: '⊞' },
+  
   { type: 'header', label: 'TOOLS' },
   { id: 'wallet', label: 'Wallet', icon: '⊡' },
   { id: 'signer', label: 'Signer', icon: '✎' },
   { id: 'multisig', label: 'Multisig', icon: '⊕' },
+  { id: 'alertRules', label: 'Alerts', icon: '🔔' },
   { id: 'portfolio', label: 'Portfolio', icon: '◐' },
   { id: 'charts', label: 'Charts', icon: '▤' },
   { id: 'analytics', label: 'Analytics', icon: '◍' },
   { id: 'systemHealth', label: 'Health', icon: '⚕' },
+  { id: 'dataExport', label: 'Export', icon: '⬇' },
   { id: 'settings', label: 'Settings', icon: '⚙' },
   { id: 'audit', label: 'Audit', icon: '⊟' },
 ]
@@ -91,6 +100,7 @@ export default function Sidebar({ isMobile = false }) {
 
   const sidebarStyles = {
     width: isMobile ? 'var(--sidebar-width-mobile)' : 'var(--sidebar-width)',
+    maxWidth: isMobile ? 'calc(100vw - 24px)' : 'none',
     minHeight: '100vh',
     background: 'var(--bg-surface)',
     borderRight: '1px solid var(--border)',

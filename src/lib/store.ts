@@ -13,6 +13,10 @@ export interface SearchFilters {
   minFee: string
   maxFee: string
   type: string
+  minAmount: string
+  maxAmount: string
+  startDate: string
+  endDate: string
 }
 
 export interface ComparisonSlot {
@@ -27,6 +31,8 @@ export interface Notification {
   type: string
   title: string
   [key: string]: unknown
+  read?: boolean
+  timestamp?: number
 }
 
 export interface StreamLedger {
@@ -35,6 +41,17 @@ export interface StreamLedger {
 }
 
 const THEME_STORAGE_KEY = 'stellar-dashboard-theme'
+export const DEFAULT_SEARCH_FILTERS: SearchFilters = {
+  status: 'all',
+  memoOnly: false,
+  minFee: '',
+  maxFee: '',
+  type: 'all',
+  minAmount: '',
+  maxAmount: '',
+  startDate: '',
+  endDate: '',
+}
 
 // --- System Preference Detection ---
 const getInitialTheme = (): 'light' | 'dark' => {
@@ -137,8 +154,16 @@ export interface StoreState {
   setWalletConnected: (connected: boolean, type?: string | null, publicKey?: string | null) => void
   disconnectWallet: () => void
   notifications: Notification[]
+  notificationHistory: Notification[]
+  unreadNotificationCount: number
   addNotification: (notification: Notification) => void
   removeNotification: (id: string) => void
+  addNotificationHistory: (notification: Notification) => void
+  markNotificationRead: (id: string) => void
+  markAllNotificationsRead: () => void
+  clearNotificationHistory: () => void
+
+  // Streaming (ported)
   streamStatus: string
   streamLedgers: StreamLedger[]
   streamError: string | null
@@ -150,7 +175,39 @@ export interface StoreState {
 
 export const useStore = create<StoreState>((set, get) => ({
   network: 'testnet',
+// ─── Persisted keys ───────────────────────────────────────────────────────────
+const PERSIST_KEYS: Array<keyof StoreState> = [
+  'network', 'theme', 'activeTab', 'savedSearches', 'multiSigMode', 'searchFilters',
+  'notificationHistory', 'unreadNotificationCount'
+]
+const STORE_PERSIST_KEY = 'store:preferences'
+
+// ─── Store ────────────────────────────────────────────────────────────────────
+
+// LocalStorage key for quick network persistence (synchronous, survives reload)
+const SELECTED_NETWORK_KEY = 'stellar:selected-network'
+
+function readInitialNetwork(): StoreState['network'] {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const raw = localStorage.getItem(SELECTED_NETWORK_KEY)
+      if (raw === 'mainnet' || raw === 'testnet' || raw === 'futurenet' || raw === 'local' || raw === 'custom') {
+        return raw
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return 'testnet'
+}
+
+export const useStore = create<StoreState>((set, get) => ({
+  // Network
+  network: readInitialNetwork(),
   setNetwork: (network) => {
+    try {
+      if (typeof localStorage !== 'undefined') localStorage.setItem(SELECTED_NETWORK_KEY, network)
+    } catch {}
     set({
       network,
       accountData: null,
@@ -269,6 +326,11 @@ export const useStore = create<StoreState>((set, get) => ({
 
   searchFilters: { status: 'all', memoOnly: false, minFee: '', maxFee: '', type: '' },
   setSearchFilters: (filters) => set((state) => ({ searchFilters: { ...state.searchFilters, ...filters } })),
+  // Search Filters
+  searchFilters: DEFAULT_SEARCH_FILTERS,
+  setSearchFilters: (filters) => set((state) => ({
+    searchFilters: { ...state.searchFilters, ...filters }
+  })),
 
   comparisonSlots: [],
   addComparisonSlot: () => set((state) => ({ comparisonSlots: [...state.comparisonSlots, { key: '', data: null, loading: false, error: null }] })),
@@ -304,6 +366,33 @@ export const useStore = create<StoreState>((set, get) => ({
   notifications: [],
   addNotification: (n) => set((state) => ({ notifications: [n, ...state.notifications] })),
   removeNotification: (id) => set((state) => ({ notifications: state.notifications.filter(n => n.id !== id) })),
+  notificationHistory: [],
+  unreadNotificationCount: 0,
+  addNotification: (notification) => set((state) => ({
+    notifications: [...state.notifications, notification]
+  })),
+  removeNotification: (id) => set((state) => ({
+    notifications: state.notifications.filter(n => n.id !== id)
+  })),
+  addNotificationHistory: (notification) => set((state) => ({
+    notificationHistory: [{...notification, read: false}, ...state.notificationHistory],
+    unreadNotificationCount: state.unreadNotificationCount + 1
+  })),
+  markNotificationRead: (id) => set((state) => {
+    const history = state.notificationHistory.map(n => 
+      n.id === id && !n.read ? { ...n, read: true } : n
+    )
+    const unreadCount = history.filter(n => !n.read).length
+    return { notificationHistory: history, unreadNotificationCount: unreadCount }
+  }),
+  markAllNotificationsRead: () => set((state) => ({
+    notificationHistory: state.notificationHistory.map(n => ({ ...n, read: true })),
+    unreadNotificationCount: 0
+  })),
+  clearNotificationHistory: () => set({
+    notificationHistory: [],
+    unreadNotificationCount: 0
+  }),
 
   streamStatus: 'disconnected',
   streamLedgers: [],
@@ -313,3 +402,45 @@ export const useStore = create<StoreState>((set, get) => ({
   clearStreamLedgers: () => set({ streamLedgers: [] }),
   setStreamError: (e) => set({ streamError: e }),
 }))
+
+// ─── Expose store for e2e testing ────────────────────────────────────────────
+if (typeof window !== 'undefined') {
+  (window as any).__store = useStore
+}
+
+// ─── Persistence middleware ───────────────────────────────────────────────────
+
+if (typeof window !== 'undefined') {
+  getStoredValue(STORE_PERSIST_KEY).then((saved: Record<string, unknown> | null) => {
+    if (saved && typeof saved === 'object') {
+      const slice: Partial<StoreState> = {}
+      for (const key of PERSIST_KEYS) {
+        if (key in saved) (slice as Record<string, unknown>)[key] = saved[key as string]
+      }
+      if (slice.searchFilters) {
+        slice.searchFilters = { ...DEFAULT_SEARCH_FILTERS, ...slice.searchFilters }
+      }
+      if (Object.keys(slice).length > 0) useStore.setState(slice)
+    }
+  }).catch(() => {})
+
+  useStore.subscribe((state) => {
+    const slice: Record<string, unknown> = {}
+    for (const key of PERSIST_KEYS) slice[key] = state[key]
+    syncState(STORE_PERSIST_KEY, slice).catch(() => {})
+  })
+
+  onStateChange((key: string, value: unknown) => {
+    if (key === STORE_PERSIST_KEY && value && typeof value === 'object') {
+      const current = useStore.getState()
+      const incoming = value as Record<string, unknown>
+      const patch: Partial<StoreState> = {}
+      for (const k of PERSIST_KEYS) {
+        if (incoming[k] !== undefined && incoming[k] !== current[k]) {
+          (patch as Record<string, unknown>)[k] = incoming[k]
+        }
+      }
+      if (Object.keys(patch).length > 0) useStore.setState(patch)
+    }
+  })
+}

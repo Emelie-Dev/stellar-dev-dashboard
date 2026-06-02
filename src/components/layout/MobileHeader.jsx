@@ -1,8 +1,9 @@
 import React from 'react'
 import { useStore } from '../../lib/store'
+import NetworkIndicator from './NetworkIndicator'
 
 export default function MobileHeader() {
-  const { setMobileMenuOpen, theme, toggleTheme } = useStore()
+  const { isMobileMenuOpen, setMobileMenuOpen, theme, toggleTheme } = useStore()
 
   return (
     <header 
@@ -24,7 +25,11 @@ export default function MobileHeader() {
     >
       {/* Menu button */}
       <button
-        onClick={() => setMobileMenuOpen(true)}
+        type="button"
+        aria-label={isMobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+        aria-expanded={isMobileMenuOpen}
+        aria-controls="mobile-sidebar"
+        onClick={() => setMobileMenuOpen(!isMobileMenuOpen)}
         className="touch-target"
         style={{
           background: 'transparent',
@@ -67,6 +72,9 @@ export default function MobileHeader() {
         <span style={{ fontSize: '18px' }}>✦</span>
         STELLAR
       </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <NetworkIndicator compact />
 
       {/* Theme toggle */}
       <button
