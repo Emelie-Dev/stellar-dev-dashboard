@@ -38,18 +38,25 @@ export default defineConfig({
         chunkFileNames: 'assets/[name]-[hash].js',
         entryFileNames: 'assets/[name]-[hash].js',
         assetFileNames: 'assets/[name]-[hash].[ext]',
-        // Manual chunks — keep vendor code in stable, cacheable files.
-        // Chunk strategy:
-        //   stellar-sdk  — Stellar SDK + XDR (largest dep, changes rarely)
-        //   react-vendor — React core + router (stable, long cache TTL)
-        //   ui-vendor    — Recharts + Lucide icons (changes with design work)
-        //   i18n         — i18next runtime (only needed after first render)
-        // Everything else lands in the default index chunk.
-        manualChunks: {
-          'stellar-sdk': ['@stellar/stellar-sdk'],
-          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          'ui-vendor': ['lucide-react', 'recharts'],
-          i18n: ['i18next', 'react-i18next', 'i18next-browser-languagedetector'],
+        // Manual chunks keep large libraries and feature areas cacheable while
+        // route-level dynamic imports keep the app shell small.
+        manualChunks(id) {
+          if (!id.includes('node_modules')) {
+            if (id.includes('/src/components/charts/')) return 'charts'
+            if (id.includes('/src/components/assets/')) return 'assets'
+            if (id.includes('/src/components/multisig/')) return 'multisig'
+            if (id.includes('/src/components/deployment/')) return 'deployment'
+            return undefined
+          }
+
+          if (id.includes('@stellar/stellar-sdk')) return 'stellar-sdk'
+          if (id.includes('recharts')) return 'charts-vendor'
+          if (id.includes('lucide-react')) return 'icons-vendor'
+          if (id.includes('i18next')) return 'i18n'
+          if (id.includes('react')) return 'react-vendor'
+          if (id.includes('date-fns')) return 'date-vendor'
+
+          return 'vendor'
         },
       },
     },
