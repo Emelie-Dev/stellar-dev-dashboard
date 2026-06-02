@@ -69,9 +69,9 @@ import SearchBar from './components/layout/SearchBar'
 import GlobalSearch from './components/search/GlobalSearch'
 import UserPreferences from './components/preferences/UserPreferences'
 import MobileNavigation from './components/layout/MobileNavigation'
-import AccessibilityProvider from "./components/accessibility/AccessibilityProvider";
 import KeyboardNavigation from './components/accessibility/KeyboardNavigation'
 import OfflineBanner from './components/layout/OfflineBanner'
+import PWAInstallBanner from './components/PWAInstallBanner'
 
 interface SearchResult {
   type?: string
@@ -321,6 +321,7 @@ function DashboardLayout() {
   return (
     <ErrorBoundary onRetry={handleRetry} maxRetries={3}>
       <OfflineBanner />
+      <PWAInstallBanner />
       <div
         style={{
           display: 'flex',
