@@ -2,10 +2,12 @@ import React, { useEffect, useState, type ComponentType, type CSSProperties } fr
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom'
 import { I18nProvider } from './components/I18nProvider'
 import './i18n/index.js'
-import './styles/responsive.css'
+import './styles/responsive.css';
+import { AccessibilityProvider } from './context/AccessibilityContext';
 
 import Sidebar from './components/layout/Sidebar'
 import MobileHeader from './components/layout/MobileHeader'
+import MobileSidebar from './components/layout/MobileSidebar'
 import ConnectPanel from './components/dashboard/ConnectPanel'
 import Overview from './components/dashboard/Overview'
 import Account from './components/dashboard/Account'
@@ -33,6 +35,7 @@ import ExplorerEmbed from './components/dashboard/ExplorerEmbed'
 import RealTimeLedger from './components/dashboard/RealTimeLedger'
 import Analytics from './components/dashboard/Analytics'
 import SystemHealth from './components/dashboard/SystemHealth'
+import PerformanceMonitor from './components/dashboard/PerformanceMonitor'
 import Settings from './components/dashboard/Settings'
 import { AssetDiscovery } from './components/assets'
 import { MultisigManager } from './components/multisig'
@@ -116,6 +119,7 @@ const TABS: Record<string, TabComponent> = {
   multisig: MultisigManager,
   analytics: Analytics,
   systemHealth: SystemHealth,
+  performance: PerformanceMonitor,
   settings: Settings,
   audit: AuditLog,
   anchors: AnchorIntegration,

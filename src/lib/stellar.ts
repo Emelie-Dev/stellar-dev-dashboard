@@ -2,7 +2,7 @@ import * as StellarSdk from '@stellar/stellar-sdk'
 import { Cache, TTL } from './cache.js'
 import { rateLimiter } from './rateLimiter.js'
 import auditTrail from './auditTrail.js'
-import { getCircuitBreaker } from './errorHandling/CircuitBreaker'
+import { getCircuitBreaker, CircuitState } from './errorHandling/CircuitBreaker'
 
 // ─── Cache setup ──────────────────────────────────────────────────────────────
 
@@ -230,6 +230,8 @@ export function getServer(network: NetworkName = 'testnet'): StellarSdk.Horizon.
     getServerOptions(network),
   )
 }
+
+export const ee = getServer
 
 export function getSorobanServer(network: NetworkName = 'testnet'): StellarSdk.SorobanRpc.Server {
   const config = NETWORKS[network]
@@ -531,7 +533,7 @@ export async function fetchAccountCreationDate(
 }
 
 export function streamLedgers(
-  callback: (ledger: StellarSdk.Horizon.ServerApi.LedgerRecord) => void,
+  callback: (_ledger: StellarSdk.Horizon.ServerApi.LedgerRecord) => void,
   network: NetworkName = 'testnet'
 ): () => void {
   const server = getServer(network)
@@ -1077,11 +1079,9 @@ export function parseMuxedAccount(muxedAddress: string): { masterAccount: string
  */
 export async function resolveFederatedAddress(
   federatedAddress: string,
-  network: NetworkName = 'testnet'
+  _network: NetworkName = 'testnet'
 ): Promise<{ accountId: string; memoId?: string; memoType?: string } | null> {
   try {
-    const server = getServer(network)
-    
     // Parse the federated address (name*domain)
     const [name, domain] = federatedAddress.split('*')
     
@@ -2330,8 +2330,8 @@ export async function getTrustlineRecommendations(
     
     // Sort by recommendation score
     return recommendations.sort((a, b) => b.recommendation_score - a.recommendation_score)
-  } catch (error) {
-    console.error('Error getting trustline recommendations:', error)
+  } catch (_error) {
+    console.error('Error getting trustline recommendations:', _error)
     return []
   }
 }
@@ -2364,7 +2364,7 @@ export async function searchAssets(
           description: issuerInfo.description,
           is_verified: issuerInfo.verification_level !== 'none'
         }
-      } catch (error) {
+      } catch {
         return asset
       }
     })
