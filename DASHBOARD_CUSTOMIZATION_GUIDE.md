@@ -6,6 +6,7 @@ The Stellar Dev Dashboard now features a fully customizable widget-based layout 
 
 ## Features
 
+
 ### ✨ Core Features
 - **Drag & Drop**: Rearrange widgets by dragging them to new positions
 - **Resizable Widgets**: Resize widgets using the resize handle in edit mode
@@ -35,7 +36,9 @@ The Stellar Dev Dashboard now features a fully customizable widget-based layout 
 
 ## How to Use
 
+
 ### Basic Usage
+
 
 1. **View Mode** (Default)
    - View your widgets in read-only mode
