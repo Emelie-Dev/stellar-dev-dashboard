@@ -1,161 +1,160 @@
 /**
- * src/utils/offline.js
+ * Offline detection and sync utilities
  *
- * PWA offline utilities:
- *  - registerServiceWorker()   — registers /sw.js, fires callbacks on update ready
- *  - onUpdateReady(cb)         — subscribe to SW update events
- *  - applyUpdate()             — tell the waiting SW to take over
- *  - captureInstallPrompt()    — store the beforeinstallprompt event
- *  - canInstall()              — true when a deferred prompt is waiting
- *  - promptInstall()           — trigger the native install dialog
- *  - isOffline()               — true when navigator.onLine === false
- *  - onNetworkChange(cb)       — subscribe to online/offline events
+ * Enhancements (pwa-offline-resilience):
+ *  - navigator.onLine + window events for real-time status
+ *  - Persistent offline queue backed by IndexedDB (storage.js OFFLINE_Q store)
+ *  - RetryManager-powered flush with exponential back-off when back online
+ *  - Simple pub/sub so any component can react to connectivity changes
  */
 
-// ─── Internal state ───────────────────────────────────────────────────────────
+import { enqueueOfflineOp, getOfflineQueue, dequeueOfflineOp } from '../lib/storage.js';
+import { retryManager } from '../lib/errorHandling/RetryManager.ts';
+import { createLogger } from './logger.js';
 
-let _registration = null;
-let _waitingSW = null;
-let _deferredInstallPrompt = null;
-const _updateListeners = new Set();
-const _networkListeners = new Set();
+const logger = createLogger('offline');
 
-// ─── Service Worker registration ─────────────────────────────────────────────
+// ─── State ────────────────────────────────────────────────────────────────────
+
+let isOnline  = typeof navigator !== 'undefined' ? navigator.onLine : true;
+let listeners = [];
+let _flushing = false;
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
 
 /**
- * Register the service worker and wire up update detection.
- * Safe to call multiple times — skips if SW is unsupported.
+ * Call once at app startup (already called on module import below).
  */
 export async function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
 
-  try {
-    _registration = await navigator.serviceWorker.register('/sw.js', {
-      scope: '/',
-    });
+  window.addEventListener('online', () => {
+    isOnline = true;
+    logger.info('Network online');
+    notifyListeners(true);
+    flushOfflineQueue();
+  });
 
-    // A new SW is waiting to activate (user already has an old version)
-    if (_registration.waiting) {
-      _waitingSW = _registration.waiting;
-      _notifyUpdateListeners();
+  window.addEventListener('offline', () => {
+    isOnline = false;
+    logger.info('Network offline');
+    notifyListeners(false);
+  });
+};
+
+// ─── Status helpers ───────────────────────────────────────────────────────────
+
+/** Returns current connectivity state. */
+export const getOnlineStatus = () => isOnline;
+
+/**
+ * Subscribe to online/offline transitions.
+ * @param {(online: boolean) => void} callback
+ * @returns {() => void} unsubscribe function
+ */
+export const subscribeToOnlineStatus = (callback) => {
+  listeners.push(callback);
+  return () => { listeners = listeners.filter(l => l !== callback); };
+};
+
+function notifyListeners(online) {
+  listeners.forEach(cb => { try { cb(online); } catch { /* ignore */ } });
+}
+
+// ─── Persistent offline queue ─────────────────────────────────────────────────
+
+/**
+ * Enqueue a write operation that should be replayed when back online.
+ *
+ * @param {string}   id        Stable identifier (used for dedup / logging)
+ * @param {Function} fn        Async function that performs the actual write
+ * @param {string}   [label]   Human-readable description shown in the UI
+ * @param {number}   [priority=0] Higher = runs first
+ */
+export const queueRequest = async (id, fn, label = '', priority = 0) => {
+  // Serialise the function as a string tag — the real fn lives in-memory.
+  // On reload the in-memory queue is gone; callers must re-register pending ops.
+  await enqueueOfflineOp({ id, label, priority, serialised: fn.toString() });
+
+  // Also keep an in-memory reference so flushes within the same session work.
+  _memoryQueue.set(id, { id, fn, label, priority });
+
+  logger.info(`Queued offline op: ${id}`);
+};
+
+/**
+ * Cancel a pending operation by id.
+ * Note: IDB records without their auto-increment id cannot be deleted by our
+ * custom id field alone; we mark them in the memory map for now and rely on
+ * the flush to skip missing memory entries.
+ */
+export const cancelQueuedRequest = (id) => {
+  _memoryQueue.delete(id);
+};
+
+/** Returns an array of currently queued items (memory view). */
+export const getPendingRequests = () => [..._memoryQueue.values()];
+
+/** Returns count of IDB-persisted queued ops (survives reload). */
+export const getPendingCount = async () => {
+  const queue = await getOfflineQueue();
+  return queue.length;
+};
+
+// In-memory map: id → { id, fn, label, priority }
+const _memoryQueue = new Map();
+
+// ─── Flush ────────────────────────────────────────────────────────────────────
+
+/**
+ * Attempt to replay all queued operations using RetryManager back-off.
+ * Called automatically when the network comes back online.
+ */
+export async function flushOfflineQueue() {
+  if (_flushing || !isOnline) return;
+  _flushing = true;
+
+  logger.info('Flushing offline queue…');
+
+  // Read IDB to find persisted ops; match them to in-memory fn references.
+  const persisted = await getOfflineQueue();
+
+  // Sort by priority desc, then queuedAt asc
+  persisted.sort((a, b) => {
+    if ((b.priority ?? 0) !== (a.priority ?? 0)) return (b.priority ?? 0) - (a.priority ?? 0);
+    return (a.queuedAt ?? 0) - (b.queuedAt ?? 0);
+  });
+
+  for (const record of persisted) {
+    const entry = _memoryQueue.get(record.id);
+    if (!entry) {
+      // No in-memory fn (e.g. after a page reload) — remove stale IDB record
+      await dequeueOfflineOp(record.id);
+      continue;
     }
 
-    // A new SW finishes installing while the page is open
-    _registration.addEventListener('updatefound', () => {
-      const newWorker = _registration.installing;
-      if (!newWorker) return;
-
-      newWorker.addEventListener('statechange', () => {
-        if (
-          newWorker.state === 'installed' &&
-          navigator.serviceWorker.controller
-        ) {
-          // New version is ready, old version still in control
-          _waitingSW = newWorker;
-          _notifyUpdateListeners();
-        }
+    try {
+      await retryManager.executeWithRetry(entry.fn, {
+        maxRetries: 3,
+        baseDelay: 1000,
+        onRetry: (attempt, err) => {
+          logger.warn(`Retry ${attempt} for queued op "${entry.id}": ${err}`);
+        },
       });
-    });
 
-    // When the SW controller changes (after skipWaiting), reload to apply update
-    let refreshing = false;
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (!refreshing) {
-        refreshing = true;
-        window.location.reload();
-      }
-    });
-
-    console.log('[SW] Registered, scope:', _registration.scope);
-  } catch (err) {
-    console.error('[SW] Registration failed:', err);
+      // Success — remove from both stores
+      _memoryQueue.delete(record.id);
+      await dequeueOfflineOp(record.id);
+      logger.info(`Replayed offline op: ${entry.id}`);
+    } catch (err) {
+      logger.error(`Failed to replay offline op "${entry.id}" after retries`, {}, err);
+      // Leave in IDB; will retry next time we go online
+    }
   }
+
+  _flushing = false;
 }
 
-function _notifyUpdateListeners() {
-  _updateListeners.forEach((cb) => cb());
-}
+// ─── Bootstrap ────────────────────────────────────────────────────────────────
 
-/**
- * Subscribe to "a new app version is ready" events.
- * @param {() => void} cb
- * @returns {() => void} unsubscribe function
- */
-export function onUpdateReady(cb) {
-  _updateListeners.add(cb);
-  // Fire immediately if an update is already waiting
-  if (_waitingSW) cb();
-  return () => _updateListeners.delete(cb);
-}
-
-/**
- * Tell the waiting SW to skip waiting and take over.
- * The page will automatically reload via the controllerchange listener above.
- */
-export function applyUpdate() {
-  if (_waitingSW) {
-    _waitingSW.postMessage({ type: 'SKIP_WAITING' });
-  }
-}
-
-// ─── Install prompt ───────────────────────────────────────────────────────────
-
-/**
- * Call once (e.g. in main.jsx) to capture the browser's install prompt.
- * The event must be captured before it fires to defer it for later.
- */
-export function captureInstallPrompt() {
-  window.addEventListener('beforeinstallprompt', (event) => {
-    event.preventDefault(); // suppress the automatic mini-infobar
-    _deferredInstallPrompt = event;
-  });
-
-  // Clear the prompt once the app is installed
-  window.addEventListener('appinstalled', () => {
-    _deferredInstallPrompt = null;
-    console.log('[PWA] App installed');
-  });
-}
-
-/** Returns true when a deferred install prompt is available. */
-export function canInstall() {
-  return _deferredInstallPrompt !== null;
-}
-
-/**
- * Show the native "Add to home screen" / install dialog.
- * @returns {Promise<'accepted'|'dismissed'|null>}
- */
-export async function promptInstall() {
-  if (!_deferredInstallPrompt) return null;
-  _deferredInstallPrompt.prompt();
-  const { outcome } = await _deferredInstallPrompt.userChoice;
-  if (outcome === 'accepted') {
-    _deferredInstallPrompt = null;
-  }
-  return outcome;
-}
-
-// ─── Network status ───────────────────────────────────────────────────────────
-
-/** Returns true when the browser reports no network connectivity. */
-export function isOffline() {
-  return !navigator.onLine;
-}
-
-/**
- * Subscribe to online/offline changes.
- * @param {(online: boolean) => void} cb
- * @returns {() => void} unsubscribe function
- */
-export function onNetworkChange(cb) {
-  const handleOnline = () => cb(true);
-  const handleOffline = () => cb(false);
-  window.addEventListener('online', handleOnline);
-  window.addEventListener('offline', handleOffline);
-  _networkListeners.add({ handleOnline, handleOffline });
-  return () => {
-    window.removeEventListener('online', handleOnline);
-    window.removeEventListener('offline', handleOffline);
-  };
-}
+initOfflineDetection();

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '../../lib/store'
 import { useResponsive } from '../../hooks/useResponsive'
 import { formatXLMValue, TOOLTIP_STYLE, AXIS_TICK_STYLE, CHART_COLORS } from '../../lib/chartUtils'
-import { fetchAccount, formatXLM, ee } from '../../lib/stellar'
+import { fetchAccount, formatXLM, getServer } from '../../lib/stellar'
 import { sparklinePath, throttle } from '../../utils/chartUtils'
 import Card from '../dashboard/Card'
 import {
@@ -50,7 +50,7 @@ export default function BalanceHistoryChart() {
 
     const seedHistory = async () => {
       try {
-        const server = ee(network)
+        const server = getServer(network)
         const currentMap = {}
         balanceData.forEach(b => { currentMap[b.asset] = b.balance })
         

@@ -31,6 +31,7 @@ import ContractABI from './components/dashboard/ContractABI'
 import AdvancedTransactionSimulation from './components/dashboard/AdvancedTransactionSimulation'
 import TransactionSimulator from './components/dashboard/TransactionSimulator'
 import DEXExplorer from './components/dashboard/DEXExplorer'
+import PathExplorer from './components/dashboard/PathExplorer'
 import ExplorerEmbed from './components/dashboard/ExplorerEmbed'
 import RealTimeLedger from './components/dashboard/RealTimeLedger'
 import Analytics from './components/dashboard/Analytics'
@@ -45,8 +46,13 @@ import AdvancedSearch from './components/dashboard/AdvancedSearch'
 import CacheStats from './components/dashboard/CacheStats'
 import LiveActivityFeed from './components/dashboard/LiveActivityFeed'
 import ClaimableBalances from './components/dashboard/ClaimableBalances'
+import DataExport from './components/dashboard/DataExport'
 import RealTimeNotificationCenter from './components/notifications/RealTimeNotificationCenter'
 import { useRealTimeNotifications } from './hooks/useRealTimeNotifications'
+import { Webhooks } from './components/dashboard/Webhooks'
+import { LearningHub } from './components/dashboard/LearningHub'
+import { HardwareWalletSecurity } from './components/dashboard/HardwareWalletSecurity'
+import { TemplateLibrary } from './components/dashboard/TemplateLibrary'
 import { pruneCaches } from './lib/cacheManager'
 import ErrorBoundary from './components/ErrorBoundary'
 import { useStore } from './lib/store'
@@ -63,7 +69,9 @@ import SearchBar from './components/layout/SearchBar'
 import GlobalSearch from './components/search/GlobalSearch'
 import UserPreferences from './components/preferences/UserPreferences'
 import MobileNavigation from './components/layout/MobileNavigation'
+import AccessibilityProvider from "./components/accessibility/AccessibilityProvider";
 import KeyboardNavigation from './components/accessibility/KeyboardNavigation'
+import OfflineBanner from './components/layout/OfflineBanner'
 
 interface SearchResult {
   type?: string
@@ -111,6 +119,7 @@ const TABS: Record<string, TabComponent> = {
   contractInteraction: ContractInteraction,
   contractABI: ContractABI,
   dex: DEXExplorer,
+  pathExplorer: PathExplorer,
   explorers: ExplorerEmbed,
   realtime: RealTimeLedger,
   charts: ChartsTab,
@@ -126,6 +135,7 @@ const TABS: Record<string, TabComponent> = {
   cacheStats: CacheStats,
   liveActivity: LiveActivityFeed,
   claimableBalances: ClaimableBalances,
+  dataExport: DataExport,
 }
 
 function NotificationBell({ onClick }: { onClick: () => void }) {
@@ -310,6 +320,7 @@ function DashboardLayout() {
 
   return (
     <ErrorBoundary onRetry={handleRetry} maxRetries={3}>
+      <OfflineBanner />
       <div
         style={{
           display: 'flex',
@@ -319,8 +330,8 @@ function DashboardLayout() {
         }}
       >
         {isMobile && <MobileHeader />}
-        {isMobile ? <MobileSidebar /> : <Sidebar />}
-        <main style={getMainStyles()}>
+        <Sidebar isMobile={isMobile} />
+        <main id="main-content" style={getMainStyles()} tabIndex={-1}>
           <KeyboardNavigation />
           <div style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <div style={{ flex: 1 }}>
@@ -412,14 +423,14 @@ function RouterSync() {
 
 export default function App() {
   return (
-    <AccessibilityProvider>
-      <I18nProvider>
-        <RouterSync />
-        <Routes>
-          <Route path="/connect" element={<DashboardLayout />} />
-          <Route path="/*" element={<DashboardLayout />} />
-        </Routes>
-      </I18nProvider>
+    <I18nProvider>
+      <AccessibilityProvider>
+      <RouterSync />
+      <Routes>
+        <Route path="/connect" element={<DashboardLayout />} />
+        <Route path="/*" element={<DashboardLayout />} />
+      </Routes>
     </AccessibilityProvider>
+    </I18nProvider>
   )
 }

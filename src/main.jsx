@@ -1,13 +1,12 @@
-import React from 'react';
-import ReactDOM from 'react-dom/client';
-import App from './App.jsx';
-import './styles/globals.css';
-import { registerServiceWorker, captureInstallPrompt } from './utils/offline.js';
+import React from "react";
+import ReactDOM from "react-dom/client";
+import { BrowserRouter } from "react-router-dom";
+import App from "./App";
+import "./styles/globals.css";
+import { initPerformanceMonitoring } from "./lib/performance";
 
-// ── PWA bootstrap ────────────────────────────────────────────────────────────
-// Capture the beforeinstallprompt event BEFORE the first render so it isn't
-// missed. Registration runs after mount so it doesn't block the first paint.
-captureInstallPrompt();
+// Initialize performance monitoring (no RUM endpoint by default)
+initPerformanceMonitoring();
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

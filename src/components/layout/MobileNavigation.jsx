@@ -12,8 +12,13 @@ const QUICK_NAV = [
 ]
 
 export default function MobileNavigation() {
+  const { activeTab, setActiveTab } = useStore()
   const navigate = useNavigate()
-  const { activeTab } = useStore()
+
+  const handleSelect = (tabId) => {
+    setActiveTab(tabId)
+    navigate(`/${tabId}`)
+  }
 
   return (
     <nav
@@ -26,11 +31,12 @@ export default function MobileNavigation() {
         return (
           <button
             key={item.id}
-            onClick={() => navigate(`/${item.id}`)}
+            onClick={() => handleSelect(item.id)}
             aria-label={item.label}
             aria-current={isActive ? 'page' : undefined}
             style={{
               display: 'flex',
+              position: 'relative',
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
@@ -52,7 +58,7 @@ export default function MobileNavigation() {
             {isActive && (
               <span style={{
                 position: 'absolute',
-                bottom: 'calc(60px - 3px)',
+                top: 0,
                 width: '20px',
                 height: '2px',
                 background: 'var(--cyan)',
