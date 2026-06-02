@@ -24,7 +24,8 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "storybook": "storybook dev -p 6006",
-    "build-storybook": "storybook build"
+    "build-storybook": "storybook build",
+    "docs:api:generate": "node scripts/generate-api-docs.mjs"
   },
   "dependencies": {
     "@stellar/stellar-sdk": "^12.3.0",
