@@ -46,9 +46,9 @@
   --content-padding-tablet: 24px;
   --content-padding-mobile: 16px;
   
-  /* Touch targets */
-  --touch-target: 44px;
-  --touch-target-sm: 36px;
+  /* Touch targets - WCAG 2.1 Level AAA requires 48×48px (Issue #140) */
+  --touch-target: 48px;
+  --touch-target-sm: 40px;
   
   /* Breakpoints (used in JS) */
   --bp-mobile: 768px;
