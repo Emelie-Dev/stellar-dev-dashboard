@@ -722,10 +722,6 @@ table {
   overflow: hidden;
 }
 
-.widget-container:hover .widget-controls {
-  opacity: 1 !important;
-}
-
 .widget-controls {
   position: absolute;
   top: 8px;
@@ -735,6 +731,10 @@ table {
   z-index: 10;
   opacity: 0;
   transition: opacity var(--transition);
+}
+
+.widget-container:hover .widget-controls {
+  opacity: 1 !important;
 }
 
 .widget-controls button {

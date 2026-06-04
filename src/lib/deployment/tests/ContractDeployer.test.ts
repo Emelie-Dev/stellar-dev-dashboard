@@ -51,6 +51,26 @@ describe('ContractDeployer', () => {
       expect(result.txHash).toBeDefined();
       expect(result.timestamp).toBeGreaterThan(0);
       expect(result.constructorArgsCount).toBe(2);
+      expect(result.receipt).toBeDefined();
+      expect(result.receipt?.artifactName).toBe('contract.wasm');
+      expect(result.receipt?.statusHistory.length).toBeGreaterThan(0);
+    });
+
+    it('supports large WASM artifacts and includes receipt metadata', async () => {
+      const largeWasm = new Uint8Array(6 * 1024 * 1024);
+      largeWasm.fill(0x61);
+
+      const result = await deployer.deployContract(
+        largeWasm,
+        mockArgs,
+        mockSourceAccount,
+        'testnet',
+        { artifactName: 'large-contract.wasm' }
+      );
+
+      expect(result.receipt?.sizeMb).toBeGreaterThan(5);
+      expect(result.receipt?.artifactName).toBe('large-contract.wasm');
+      expect(result.receipt?.artifactHash).toBeDefined();
     });
   });
 

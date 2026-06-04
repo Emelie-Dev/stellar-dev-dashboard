@@ -17,6 +17,14 @@ export default function GuidedTour({ tourId, onClose }) {
 
   const step = tour?.steps[stepIndex];
 
+  // Start timer when tour begins
+  useEffect(() => {
+    if (tour) {
+      tutorialSystem.startTimer(tourId);
+      return () => tutorialSystem.stopTimer(tourId);
+    }
+  }, [tour, tourId]);
+
   // Find and highlight the target element
   useEffect(() => {
     if (!step?.target) return;
@@ -85,6 +93,7 @@ export default function GuidedTour({ tourId, onClose }) {
             boxShadow: '0 0 0 9999px rgba(0,0,0,0.6)',
             border: '2px solid var(--accent, #6366f1)',
             pointerEvents: 'none',
+            animation: 'spotlightPulse 2s ease-in-out infinite',
           }}
         />
       )}
@@ -97,7 +106,18 @@ export default function GuidedTour({ tourId, onClose }) {
         onNext={handleNext}
         onPrev={handlePrev}
         onSkip={handleSkip}
+        tour={tour}
       />
+      <style>{`
+        @keyframes spotlightPulse {
+          0%, 100% {
+            box-shadow: 0 0 0 9999px rgba(0,0,0,0.6), 0 0 20px rgba(99,102,241,0.4);
+          }
+          50% {
+            box-shadow: 0 0 0 9999px rgba(0,0,0,0.6), 0 0 30px rgba(99,102,241,0.6);
+          }
+        }
+      `}</style>
     </>,
     document.body
   );
@@ -107,7 +127,7 @@ function computeTooltipPosition(rect, placement = 'bottom') {
   if (!rect) return { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' };
 
   const gap = 16;
-  const tooltipW = 280;
+  const tooltipW = 320;
 
   switch (placement) {
     case 'right':
