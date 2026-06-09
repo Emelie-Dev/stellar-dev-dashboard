@@ -44,14 +44,14 @@ const buildTxXdr = () =>
 describe('SignatureCollector (integration)', () => {
   let session;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     localStorage.clear();
     mockSuccess.mockClear();
     mockWarning.mockClear();
     mockError.mockClear();
     useStore.setState({ network: 'testnet' }, false);
 
-    session = createSession({
+    session = await createSession({
       txXdr: buildTxXdr(),
       sourceAddress: KP_A.publicKey(),
       description: 'Test Signing',
