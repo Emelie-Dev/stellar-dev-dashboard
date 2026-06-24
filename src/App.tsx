@@ -42,6 +42,7 @@ import ThemeToggle from './components/layout/ThemeToggle'
 import OfflineBanner from './components/layout/OfflineBanner'
 import PWAInstallBanner from './components/PWAInstallBanner'
 import { useSwipeGesture } from './hooks/useSwipeGesture'
+import { useErrorRecovery } from './hooks/useErrorRecovery'
 
 interface SearchResult {
   type?: string
@@ -186,9 +187,12 @@ function DashboardLayout() {
     setActiveTab,
     preferencesOpen,
     setPreferencesOpen,
+    healingAlertDismissed,
+    setHealingAlertDismissed,
   } = useStore()
   const { isMobile, isTablet } = useResponsive()
   const [notificationsOpen, setNotificationsOpen] = useState<boolean>(false)
+  const { overallHealth, isRecovering, healNow } = useErrorRecovery()
 
   useEffect(() => {
     pruneCaches().catch(() => {})
@@ -247,6 +251,13 @@ function DashboardLayout() {
       metadata: { activeTab },
     })
   }, [activeTab])
+
+  // D-057 — Re-show healing banner when health degrades again after dismiss
+  useEffect(() => {
+    if (overallHealth === 'healthy' && healingAlertDismissed) {
+      setHealingAlertDismissed(false)
+    }
+  }, [overallHealth, healingAlertDismissed, setHealingAlertDismissed])
 
   const ActiveComponent: TabComponent = TABS[activeTab] || Overview
 
@@ -316,6 +327,76 @@ function DashboardLayout() {
   return (
     <ErrorBoundary onRetry={handleRetry} maxRetries={3}>
       <OfflineBanner />
+      {/* D-057 — Self-healing alert banner */}
+      {!healingAlertDismissed && (overallHealth === 'down' || overallHealth === 'degraded') && (
+        <div
+          role="alert"
+          aria-live="polite"
+          style={{
+            position: 'fixed',
+            top: isMobile ? 'var(--header-height, 56px)' : '12px',
+            left: isMobile ? '8px' : '50%',
+            right: isMobile ? '8px' : 'auto',
+            transform: isMobile ? 'none' : 'translateX(-50%)',
+            zIndex: 2000,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            padding: '10px 14px',
+            background: overallHealth === 'down' ? 'var(--red, #ef4444)' : 'var(--amber, #f59e0b)',
+            color: '#fff',
+            borderRadius: 'var(--radius-md)',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
+            fontSize: '13px',
+            fontWeight: 600,
+            maxWidth: '520px',
+          }}
+        >
+          <span>{overallHealth === 'down' ? '🔴' : '⚠️'}</span>
+          <span style={{ flex: 1 }}>
+            {overallHealth === 'down'
+              ? 'One or more Stellar services are unreachable. Auto-recovery is running.'
+              : 'Stellar network connectivity is degraded. Auto-recovery in progress.'}
+          </span>
+          {isRecovering && (
+            <span style={{ fontSize: '11px', opacity: 0.9 }}>Healing…</span>
+          )}
+          {!isRecovering && (
+            <button
+              onClick={() => healNow()}
+              style={{
+                padding: '4px 10px',
+                background: 'rgba(255,255,255,0.25)',
+                border: '1px solid rgba(255,255,255,0.5)',
+                borderRadius: 'var(--radius-sm)',
+                color: '#fff',
+                fontSize: '11px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Retry Now
+            </button>
+          )}
+          <button
+            onClick={() => setHealingAlertDismissed(true)}
+            aria-label="Dismiss healing alert"
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#fff',
+              cursor: 'pointer',
+              fontSize: '16px',
+              lineHeight: 1,
+              padding: '2px',
+              opacity: 0.8,
+            }}
+          >
+            ×
+          </button>
+        </div>
+      )}
       <PWAInstallBanner />
       <div
         style={{
