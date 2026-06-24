@@ -1,4 +1,8 @@
 node_modules
 .kiro
 node_modules/
-
+coverage/
+.lighthouseci/
+.stryker-tmp/
+reports/
+storybook-static/
