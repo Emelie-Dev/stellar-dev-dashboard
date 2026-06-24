@@ -56,8 +56,10 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'designSystem', label: 'Design System', icon: '◈' },
   { id: 'featureFlags', label: 'Flags', icon: '🚩' },
   { id: 'systemHealth', label: 'Health', icon: '⚕' },
+  { id: 'monitoringDashboards', label: 'Monitoring', icon: '📊' },
   { id: 'dataExport', label: 'Export', icon: '⬇' },
   { id: 'collaboration', label: 'Collaboration', icon: '◌' },
+  { id: 'governance', label: 'Governance', icon: '🗳' },
   { id: 'settings', label: 'Settings', icon: '⚙' },
   { id: 'audit', label: 'Audit', icon: '⊟' },
 ];

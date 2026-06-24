@@ -42,6 +42,7 @@ import ThemeToggle from './components/layout/ThemeToggle'
 import OfflineBanner from './components/layout/OfflineBanner'
 import PWAInstallBanner from './components/PWAInstallBanner'
 import { useSwipeGesture } from './hooks/useSwipeGesture'
+import DevToolbar from './components/dashboard/DevToolbar'
 
 interface SearchResult {
   type?: string
@@ -100,6 +101,9 @@ const TABS: Record<string, TabComponent> = {
   liveActivity: lazyTab(() => import('./components/dashboard/LiveActivityFeed')),
   claimableBalances: lazyTab(() => import('./components/dashboard/ClaimableBalances')),
   dataExport: lazyTab(() => import('./components/dashboard/DataExport')),
+  governance: lazyTab(() => import('./components/dashboard/Governance')),
+  monitoringDashboards: lazyTab(() => import('./components/dashboard/MonitoringDashboards')),
+  devToolbar: lazyTab(() => import('./components/dashboard/DevToolbar')),
 }
 
 function TabLoadingFallback() {
@@ -376,6 +380,7 @@ function DashboardLayout() {
           </ErrorBoundary>
         </main>
         <TourLauncher />
+        <DevToolbar />
         <NotificationBell
           onClick={() => setNotificationsOpen(true)}
           bottomOffset={isMobile ? 'calc(60px + 16px)' : '20px'}
