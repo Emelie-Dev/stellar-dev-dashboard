@@ -1,46 +1,112 @@
 # SDK Examples
 
-This page collects runnable examples for JavaScript and Python developers using Horizon, Soroban RPC, and the repository's API helper layer.
+This page collects all runnable examples for JavaScript, TypeScript, and Python developers.
 
-## JavaScript Example
-
-The repository includes a runnable JavaScript example at `docs/api/examples/js/stellar-horizon-account-example.js`.
-
-Run it with:
+## Quick start
 
 ```bash
-node docs/api/examples/js/stellar-horizon-account-example.js G...PUBLICKEY...
+# JavaScript / TypeScript (Node.js ≥ 18)
+npm install @stellar/stellar-sdk
+
+# Python (≥ 3.9)
+pip install stellar-sdk
 ```
 
-Example output shows Horizon account data returned as JSON.
+---
 
-### JavaScript sample
+## JavaScript / TypeScript examples
 
-```js
-import { Server } from '@stellar/stellar-sdk'
+All examples live in `docs/api/examples/js/` and run with Node.js ≥ 18.
 
-const server = new Server('https://horizon-testnet.stellar.org')
-
-async function fetchAccount(publicKey) {
-  const account = await server.accounts().accountId(publicKey).call()
-  console.log(JSON.stringify(account, null, 2))
-}
-
-fetchAccount('G...')
-```
-
-## Python Example
-
-The repository includes a runnable Python example at `docs/api/examples/python/horizon_account_example.py`.
-
-Run it with:
+### Fetch account
 
 ```bash
-python docs/api/examples/python/horizon_account_example.py G...PUBLICKEY...
+node docs/api/examples/js/stellar-horizon-account-example.js GABC...PUBLIC_KEY
 ```
 
-This example uses Python's standard library to fetch Horizon account data and print the parsed response.
+### Send XLM payment
 
-## Request/Response Samples
+```bash
+node docs/api/examples/js/send-payment.mjs SXXX...SECRET GDEST...RECIPIENT 10 "Hello"
+```
 
-For direct API integration, see `docs/api/REQUEST_RESPONSE_SAMPLES.md` for HTTP request and response payload examples.
+### Create trustline
+
+```bash
+# Add USDC trustline
+node docs/api/examples/js/create-trustline.mjs \
+  SXXX...SECRET \
+  USDC \
+  GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5
+```
+
+### Invoke a Soroban contract
+
+```bash
+node docs/api/examples/js/invoke-contract.mjs SXXX...SECRET CBXG...CONTRACT_ID increment
+```
+
+---
+
+## Python examples
+
+All examples live in `docs/api/examples/python/` and require `pip install stellar-sdk`.
+
+### Fetch account
+
+```bash
+python docs/api/examples/python/horizon_account_example.py GABC...PUBLIC_KEY
+```
+
+### Send XLM payment
+
+```bash
+python docs/api/examples/python/send_payment.py SXXX...SECRET GDEST...RECIPIENT 10 "Hello"
+```
+
+### Create trustline
+
+```bash
+python docs/api/examples/python/create_trustline.py \
+  SXXX...SECRET \
+  USDC \
+  GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5
+```
+
+### Invoke a Soroban contract
+
+```bash
+python docs/api/examples/python/invoke_contract.py SXXX...SECRET CBXG...CONTRACT_ID increment
+```
+
+---
+
+## Get a testnet account
+
+1. Generate a keypair:
+
+```bash
+node -e "
+import('@stellar/stellar-sdk').then(({ Keypair }) => {
+  const kp = Keypair.random();
+  console.log('Public:', kp.publicKey());
+  console.log('Secret:', kp.secret());
+});
+"
+```
+
+2. Fund via Friendbot:
+
+```bash
+curl "https://friendbot.stellar.org?addr=GABC...YOUR_PUBLIC_KEY"
+```
+
+---
+
+## Full interactive documentation
+
+See the [Docusaurus docs site](https://damiedee96.github.io/stellar-dev-dashboard/) for the full interactive API reference, guides, and live endpoint explorer.
+
+- [Getting Started](https://damiedee96.github.io/stellar-dev-dashboard/docs/getting-started)
+- [API Reference](https://damiedee96.github.io/stellar-dev-dashboard/docs/api-reference/overview)
+- [Interactive Explorer](https://damiedee96.github.io/stellar-dev-dashboard/docs/api-explorer)

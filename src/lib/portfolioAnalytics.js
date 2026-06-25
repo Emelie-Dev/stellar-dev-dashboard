@@ -7,6 +7,12 @@
  * - Risk assessment metrics
  * - P&L calculations
  * - Diversification analysis
+ * - Real-time portfolio value tracking
+ * - Correlation analysis
+ * - Performance benchmarking
+ * - Risk assessment
+ * - Allocation suggestions
+ * - Rebalancing recommendations
  */
 
 // ── Asset Allocation ──────────────────────────────────────────────────────────

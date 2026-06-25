@@ -247,7 +247,134 @@ async function generate() {
   console.log('Generated version history:', VERSION_HISTORY_FILE)
 }
 
-generate().catch((error) => {
+// ─── Example script syntax validation ─────────────────────────────────────
+
+async function collectExampleFiles(dir, exts) {
+  const files = []
+  let entries = []
+  try {
+    entries = await fs.readdir(dir, { withFileTypes: true })
+  } catch {
+    return files
+  }
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name)
+    if (entry.isDirectory()) {
+      files.push(...(await collectExampleFiles(fullPath, exts)))
+    } else if (exts.some(e => entry.name.endsWith(e))) {
+      files.push(fullPath)
+    }
+  }
+  return files
+}
+
+async function validateExamples() {
+  const examplesRoot = path.join(ROOT, 'docs', 'api', 'examples')
+  const jsFiles = await collectExampleFiles(path.join(examplesRoot, 'js'), ['.js', '.mjs'])
+  const pyFiles = await collectExampleFiles(path.join(examplesRoot, 'python'), ['.py'])
+
+  let passed = 0
+  let failed = 0
+  const errors = []
+
+  for (const file of jsFiles) {
+    const rel = path.relative(ROOT, file).replace(/\\/g, '/')
+    try {
+      execSync(`node --check "${file}"`, { stdio: 'pipe' })
+      console.log(`  ✓ ${rel}`)
+      passed++
+    } catch (err) {
+      const msg = err.stderr?.toString().trim() || err.message
+      console.error(`  ✗ ${rel}\n    ${msg}`)
+      errors.push({ file: rel, error: msg })
+      failed++
+    }
+  }
+
+  for (const file of pyFiles) {
+    const rel = path.relative(ROOT, file).replace(/\\/g, '/')
+    try {
+      execSync(`python -m py_compile "${file}"`, { stdio: 'pipe' })
+      console.log(`  ✓ ${rel}`)
+      passed++
+    } catch (err) {
+      const msg = err.stderr?.toString().trim() || err.message
+      console.error(`  ✗ ${rel}\n    ${msg}`)
+      errors.push({ file: rel, error: msg })
+      failed++
+    }
+  }
+
+  return { passed, failed, errors }
+}
+
+// ─── Summary report ────────────────────────────────────────────────────────
+
+async function writeSummaryReport(sections, exampleResults) {
+  const reportPath = path.join(OUTPUT_DIR, 'GENERATION_REPORT.md')
+  const lines = [
+    '# API Docs Generation Report',
+    '',
+    `Generated: ${new Date().toISOString()}`,
+    '',
+    '## API Reference',
+    '',
+    `- **Source files scanned:** ${sections.length}`,
+    `- **Exported symbols documented:** ${sections.reduce((n, s) => n + s.exports.length, 0)}`,
+    '',
+    '## Example Script Validation',
+    '',
+    `- **Passed:** ${exampleResults.passed}`,
+    `- **Failed:** ${exampleResults.failed}`,
+    '',
+  ]
+
+  if (exampleResults.errors.length) {
+    lines.push('### Failures', '')
+    for (const e of exampleResults.errors) {
+      lines.push(`- \`${e.file}\`: ${e.error}`)
+    }
+    lines.push('')
+  } else {
+    lines.push('All example scripts passed syntax validation. ✓', '')
+  }
+
+  await fs.writeFile(reportPath, lines.join('\n'), 'utf8')
+  console.log('Generation report:', reportPath)
+}
+
+// ─── Main ──────────────────────────────────────────────────────────────────
+
+async function generateAll() {
+  console.log('\n── Generating API reference ──')
+  await generate()
+
+  console.log('\n── Validating example scripts ──')
+  const exampleResults = await validateExamples()
+
+  // Re-collect sections for the summary (lightweight re-scan)
+  const files = await collectSourceFiles(SOURCE_ROOT)
+  const sections = []
+  for (const filePath of files.sort()) {
+    const content = await fs.readFile(filePath, 'utf8')
+    const exports = extractExports(filePath, content)
+    if (exports.length) sections.push({ filePath, exports })
+  }
+
+  await writeSummaryReport(sections, exampleResults)
+
+  console.log(`\n── Done ──`)
+  console.log(`   API reference:  ${API_REFERENCE_FILE}`)
+  console.log(`   Version history: ${VERSION_HISTORY_FILE}`)
+  console.log(`   Examples: ${exampleResults.passed} passed, ${exampleResults.failed} failed`)
+
+  if (exampleResults.failed > 0) {
+    console.error('\n⚠ Some example scripts failed syntax validation. See GENERATION_REPORT.md')
+    process.exit(1)
+  }
+}
+
+generateAll().catch((error) => {
   console.error('Failed to generate API docs:', error)
   process.exit(1)
 })

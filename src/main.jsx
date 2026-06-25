@@ -4,13 +4,25 @@ import { BrowserRouter } from "react-router-dom";
 import App from "./App";
 import "./styles/globals.css";
 import { initPerformanceMonitoring } from "./lib/performance";
+import { selfHealingManager } from "./lib/errorHandling/SelfHealingManager";
+import { registerBuiltInStrategies, registerNetworkProbes } from "./lib/errorHandling/RecoveryStrategyRegistry";
 
 // Initialize performance monitoring (no RUM endpoint by default)
 initPerformanceMonitoring();
 
+// D-057 — Bootstrap error recovery & self-healing
+registerBuiltInStrategies();
+registerNetworkProbes().then(() => {
+  selfHealingManager.start();
+}).catch(() => {
+  // Non-critical: app continues without self-healing probes
+});
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <App />
+    <BrowserRouter>
+      <App />
+    </BrowserRouter>
   </React.StrictMode>
 );
 

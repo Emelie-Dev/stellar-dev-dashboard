@@ -3,6 +3,7 @@ import ErrorFallback from './ErrorFallback';
 import { handleGlobalError, retryWithBackoff as retryUtil } from '../utils/errorHandler';
 import { createLogger } from '../utils/logger';
 import { ErrorDetails } from '../types/error';
+import { selfHealingManager } from '../lib/errorHandling/SelfHealingManager';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -51,6 +52,18 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
     }, error);
 
     this.setState({ errorDetails });
+
+    // D-057 — Trigger self-healing for any degraded network services
+    // that may have caused this render error indirectly.
+    const statuses = selfHealingManager.getStatuses();
+    const unhealthy = [...statuses.values()].filter(
+      (s) => s.health === 'degraded' || s.health === 'down'
+    );
+    if (unhealthy.length > 0) {
+      Promise.allSettled(
+        unhealthy.map((s) => selfHealingManager.healNow(s.id))
+      ).catch(() => {});
+    }
   }
 
   resetErrorBoundary = () => {

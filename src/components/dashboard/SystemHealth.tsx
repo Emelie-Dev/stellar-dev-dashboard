@@ -4,6 +4,7 @@ import { useMonitoring } from "../../hooks/useMonitoring";
 import { StatCard } from "./Card";
 import { LatencyTrendChart } from "../charts/AnalyticsChart";
 import type { AlertEntry, MonitoringSnapshot, HealthProbe, NetworkHealthProbe } from "./types";
+import { ErrorRecoveryPanel } from "../errors/ErrorRecoveryPanel";
 
 function AlertRow({ alert, onClear }: { alert: AlertEntry; onClear: (id: string) => void }) {
   const color =
@@ -248,6 +249,9 @@ export default function SystemHealth() {
           View Performance Monitor →
         </button>
       </div>
+
+      {/* D-057 — Error Recovery & Self-Healing panel */}
+      <ErrorRecoveryPanel />
     </div>
   );
 }

@@ -49,14 +49,23 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'wallet', label: 'Wallet', icon: '⊡' },
   { id: 'signer', label: 'Signer', icon: '✎' },
   { id: 'multisig', label: 'Multisig', icon: '⊕' },
+  { id: 'did', label: 'DID', icon: '🆔' },
   { id: 'alertRules', label: 'Alerts', icon: '🔔' },
   { id: 'portfolio', label: 'Portfolio', icon: '◐' },
+  { id: 'portfolioAnalytics', label: 'Portfolio Analytics', icon: '📊' },
   { id: 'charts', label: 'Charts', icon: '▤' },
   { id: 'analytics', label: 'Analytics', icon: '◍' },
+  { id: 'designSystem', label: 'Design System', icon: '◈' },
+  { id: 'featureFlags', label: 'Flags', icon: '🚩' },
+  { id: 'txPatterns', label: 'AI Patterns', icon: '🧠' },
   { id: 'systemHealth', label: 'Health', icon: '⚕' },
+  { id: 'monitoringDashboards', label: 'Monitoring', icon: '📊' },
   { id: 'dataExport', label: 'Export', icon: '⬇' },
+  { id: 'collaboration', label: 'Collaboration', icon: '◌' },
+  { id: 'governance', label: 'Governance', icon: '🗳' },
   { id: 'settings', label: 'Settings', icon: '⚙' },
   { id: 'audit', label: 'Audit', icon: '⊟' },
+  { id: 'security', label: 'Security', icon: '🛡️' },
 ];
 
 export interface SidebarProps {
