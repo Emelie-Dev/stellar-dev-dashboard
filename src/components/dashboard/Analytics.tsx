@@ -2,6 +2,7 @@ import React from "react";
 import { useAnalytics } from "../../hooks/useAnalytics";
 import AnalyticsChart from "../charts/AnalyticsChart";
 import { StatCard } from "./Card";
+import CustomReports from "./CustomReports";
 import type { AlertEntry } from "./types";
 
 function RiskItem({ signal }: { signal: AlertEntry }) {
@@ -49,6 +50,8 @@ export default function Analytics() {
       </div>
 
       <AnalyticsChart data={analytics.activity || []} />
+
+      <CustomReports analytics={analytics} />
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "12px" }}>
         <StatCard label="Latest Ledger" value={network.latestLedgerSequence || "—"} />
