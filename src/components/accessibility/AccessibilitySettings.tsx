@@ -4,10 +4,21 @@ import '../../styles/accessibility.css';
 
 export default function AccessibilitySettings({ onClose }: { onClose: () => void }) {
   const { settings, setReducedMotion, setHighContrast, setFontSize } = useAccessibility();
+  const [dyslexiaFont, setDyslexiaFont] = React.useState(false);
 
   const toggleReduced = () => setReducedMotion(!settings.reducedMotion);
   const toggleContrast = () => setHighContrast(!settings.highContrast);
   const changeFontSize = (size: 'small' | 'default' | 'large') => setFontSize(size);
+  
+  const toggleDyslexiaFont = () => {
+    const newValue = !dyslexiaFont;
+    setDyslexiaFont(newValue);
+    if (newValue) {
+      document.documentElement.style.setProperty('--font-family', 'OpenDyslexic, Arial, sans-serif');
+    } else {
+      document.documentElement.style.removeProperty('--font-family');
+    }
+  };
 
   return (
     <div
@@ -100,6 +111,16 @@ export default function AccessibilitySettings({ onClose }: { onClose: () => void
                 </label>
               ))}
             </div>
+          </div>
+          {/* Dyslexia-Friendly Font */}
+          <div style={{ display: 'flex', alignItems: 'center', marginTop: '16px' }}>
+            <label style={{ flex: 1, fontSize: '14px', color: 'var(--text-primary)' }}>Dyslexia-Friendly Font</label>
+            <input
+              type="checkbox"
+              checked={dyslexiaFont}
+              onChange={toggleDyslexiaFont}
+              aria-checked={dyslexiaFont}
+            />
           </div>
         </div>
       </div>
