@@ -100,7 +100,7 @@ const TABS: Record<string, TabComponent> = {
   liveActivity: lazyTab(() => import('./components/dashboard/LiveActivityFeed')),
   claimableBalances: lazyTab(() => import('./components/dashboard/ClaimableBalances')),
   dataExport: lazyTab(() => import('./components/dashboard/DataExport')),
-  did: lazyTab(() => import('./components/dashboard/DIDManagement')),
+  defi: lazyTab(() => import('./components/dashboard/DeFiAnalytics')),
 }
 
 function TabLoadingFallback() {
