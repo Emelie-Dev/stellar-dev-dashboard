@@ -1,5 +1,6 @@
 import { encrypt, decrypt } from './encryption.js'
 import { getEncryptedValue, setEncryptedValue } from './storage.js'
+import { saveTemplateConfig } from './config'
 
 export interface TransactionTemplateOperation {
   type: string
@@ -81,6 +82,13 @@ export async function saveUserTransactionTemplates(
 ): Promise<void> {
   const pack = buildPack(templates)
   await setEncryptedValue(STORAGE_KEY, JSON.stringify(pack), passphrase)
+  await Promise.all(pack.templates.map((template) => saveTemplateConfig({
+    id: template.id,
+    name: template.label,
+    type: 'transaction-template',
+    category: 'transaction',
+    data: template,
+  })))
   cachedTemplates = pack.templates
 }
 

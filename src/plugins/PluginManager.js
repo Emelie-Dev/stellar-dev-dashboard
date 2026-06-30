@@ -1,5 +1,10 @@
 import React from "react";
-import { getEnvironmentConfig, loadConfigProfiles, getActiveProfileName } from "../lib/config";
+import {
+  getActiveProfileName,
+  getEnvironmentConfig,
+  loadConfigProfiles,
+  savePluginConfig,
+} from "../lib/config";
 import { useStore } from "../lib/store"; // Assuming useStore can return the store instance
 
 const PLUGIN_STATUSES = Object.freeze({
@@ -187,6 +192,17 @@ export class PluginManager {
     };
 
     this.plugins.set(id, record);
+    savePluginConfig({
+      id,
+      name: record.name,
+      type: "plugin",
+      data: {
+        id,
+        name: record.name,
+        status: record.status,
+        registeredAt: new Date().toISOString(),
+      },
+    }).catch(() => {});
     this.emitChange();
     return record;
   }

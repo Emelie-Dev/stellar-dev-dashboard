@@ -5,6 +5,7 @@
  */
 
 import { getStoredValue, setStoredValue, removeStoredValue } from './storage'
+import { saveNetworkConfig, queryConfig, CONFIG_TABLES } from './config'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -441,6 +442,10 @@ export async function removeSavedAddress(address: string): Promise<UserPreferenc
  */
 export async function loadNetworkProfiles(): Promise<NetworkProfile[]> {
   try {
+    const databaseProfiles = await queryConfig(CONFIG_TABLES.NETWORKS)
+    if (databaseProfiles.length) {
+      return databaseProfiles.map((record: any) => record.data as NetworkProfile)
+    }
     const stored = await getStoredValue(NETWORK_PROFILES_KEY) as NetworkProfile[] | null
     return stored || []
   } catch {
@@ -478,6 +483,13 @@ export async function saveNetworkProfile(profile: Omit<NetworkProfile, 'createdA
   }
   
   await setStoredValue(NETWORK_PROFILES_KEY, profiles)
+  await saveNetworkConfig({
+    id: newProfile.id,
+    name: newProfile.name,
+    network: newProfile.id,
+    type: 'network',
+    data: newProfile,
+  })
   
   // Update preferences to track active profile
   const prefs = await loadPreferences()
