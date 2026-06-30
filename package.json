@@ -37,7 +37,8 @@
     "ci:testing": "npm run test:coverage && npm run test:coverage:check && npm run ci:workflows",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
-    "docs:api:generate": "node scripts/generate-api-docs.mjs"
+    "docs:api:generate": "node scripts/generate-api-docs.mjs",
+    "api:start": "node api/server.js"
   },
   "dependencies": {
     "@tensorflow/tfjs-node": "^4.17.0",
@@ -67,7 +68,8 @@
     "recharts": "^2.12.7",
     "uuid": "^9.0.1",
     "zustand": "^4.5.4",
-    "swr": "^2.2.0"
+    "swr": "^2.2.0",
+    "ws": "^8.16.0"
   },
   "optionalDependencies": {
     "@ledgerhq/hw-transport-webhid": "^6.29.4",
